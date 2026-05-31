@@ -10,6 +10,7 @@ Enhancements applied:
   * Single-tap Right-Command toggle (tap right cmd to start/stop recording).
   * Ctrl+F also routes to local whisper.cpp when TRANSCRIPTION_SERVICE=local.
   * start.sh dependency-check fix.
+  * Local-mode punctuation: prompt-guided punctuation + half->full-width CJK punctuation.
 
 Targets upstream commit 5edec44bd66ca0a75c75c485d5af2fd201ce8c17. If you pin a different
 commit and an anchor no longer matches, this script tells you which one and stops.
@@ -180,6 +181,65 @@ EDITS = [
             'if ! .venv/bin/python -c "import openai" >/dev/null 2>&1; then',
         desc="start.sh dependency-check fix",
     ),
+    # ---- src/transcription/local_whisper.py (punctuation) ----
+    dict(
+        file="src/transcription/local_whisper.py",
+        marker="self.initial_prompt = os.getenv",
+        old='        # 是否启用Kimi润色功能（默认关闭，通过快捷键动态控制）\n'
+            '        self.enable_kimi_polish = os.getenv("ENABLE_KIMI_POLISH", "false").lower() == "true"',
+        new='        # 是否启用Kimi润色功能（默认关闭，通过快捷键动态控制）\n'
+            '        self.enable_kimi_polish = os.getenv("ENABLE_KIMI_POLISH", "false").lower() == "true"\n'
+            '        # 初始 prompt：带标点的引导让 whisper 输出标点（纯本地、免费；WHISPER_PROMPT 置空可关闭）\n'
+            '        self.initial_prompt = os.getenv("WHISPER_PROMPT", "以下是一段普通话，请正确断句并加上标点符号。")\n'
+            '        # 是否把与中文相邻的半角标点转为全角（WHISPER_FULLWIDTH_PUNCT=false 可关闭）\n'
+            '        self.fullwidth_punct = os.getenv("WHISPER_FULLWIDTH_PUNCT", "true").lower() == "true"',
+        desc="local: WHISPER_PROMPT + fullwidth-punct config",
+    ),
+    dict(
+        file="src/transcription/local_whisper.py",
+        marker='cmd += ["--prompt"',
+        old='                "--no-prints",\n'
+            '            ]',
+        new='                "--no-prints",\n'
+            '            ]\n'
+            '            # 带标点引导：让本地 whisper 输出标点（WHISPER_PROMPT 置空则关闭）\n'
+            '            if self.initial_prompt:\n'
+            '                cmd += ["--prompt", self.initial_prompt]',
+        desc="local: pass --prompt to whisper-cli",
+    ),
+    dict(
+        file="src/transcription/local_whisper.py",
+        marker="def _to_fullwidth_punct",
+        old='    def process_audio(self, audio_buffer, mode="transcriptions", prompt="", archive_path=None):',
+        new='    @staticmethod\n'
+            '    def _to_fullwidth_punct(text):\n'
+            '        """把与中文相邻的半角标点转为全角（不影响纯英文与小数）。"""\n'
+            "        mapping = {',': '，', '.': '。', '!': '！', '?': '？', ':': '：', ';': '；'}\n"
+            '        chars = list(text)\n'
+            '        out = []\n'
+            '        for i, ch in enumerate(chars):\n'
+            '            if ch in mapping:\n'
+            "                prev_ch = chars[i - 1] if i > 0 else ''\n"
+            "                next_ch = chars[i + 1] if i + 1 < len(chars) else ''\n"
+            "                if ('一' <= prev_ch <= '鿿') or ('一' <= next_ch <= '鿿'):\n"
+            '                    out.append(mapping[ch])\n'
+            '                    continue\n'
+            '            out.append(ch)\n'
+            "        return ''.join(out)\n"
+            '\n'
+            '    def process_audio(self, audio_buffer, mode="transcriptions", prompt="", archive_path=None):',
+        desc="local: _to_fullwidth_punct() helper",
+    ),
+    dict(
+        file="src/transcription/local_whisper.py",
+        marker="if self.fullwidth_punct:",
+        old='            return full_txt.strip()',
+        new='            result_txt = full_txt.strip()\n'
+            '            if self.fullwidth_punct:\n'
+            '                result_txt = self._to_fullwidth_punct(result_txt)\n'
+            '            return result_txt',
+        desc="local: apply fullwidth punctuation to result",
+    ),
 ]
 
 
@@ -217,7 +277,7 @@ def main():
         print(f"  [ok]   {e['file']}: {e['desc']}")
 
     # syntax check the python files we touched
-    for rel in ("main.py", "src/keyboard/listener.py"):
+    for rel in ("main.py", "src/keyboard/listener.py", "src/transcription/local_whisper.py"):
         p = os.path.join(app_dir, rel)
         if os.path.isfile(p):
             try:

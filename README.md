@@ -25,6 +25,7 @@ app, including chat boxes, editors, and IDEs.
 - 🧠 **Ctrl+F also routes to local** whisper.cpp (upstream wires local to Ctrl+I only).
 - 🚀 **launchd auto-start service** — starts at login, restarts on crash, **no terminal
   window**, runs until you shut down.
+- ✍️ **Better Chinese punctuation** (local mode) — prompt-guided punctuation + half→full-width CJK normalization, both configurable.
 - 🩹 **Bug fix** for upstream's `start.sh` dependency check.
 - ⚙️ **Turn-key setup** — uv venv, dependencies, `whisper-cpp`, model download, `.env`, and
   the launchd agent, all wired with the correct paths for *your* machine.

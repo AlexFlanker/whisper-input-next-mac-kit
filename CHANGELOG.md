@@ -3,6 +3,15 @@
 All notable changes to this kit are documented here.
 This project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.1.1] — 2026-05-31
+
+### Added
+- **Local-mode punctuation.** Chinese transcripts now get punctuation:
+  - a prompt-guided default (`WHISPER_PROMPT`) makes whisper.cpp emit punctuation;
+  - half-width punctuation adjacent to CJK is normalized to full-width 「，。！？」
+    (`WHISPER_FULLWIDTH_PUNCT`, on by default).
+  Both are configurable in `.env`.
+
 ## [0.1.0] — 2026-05-31
 
 Initial release.
