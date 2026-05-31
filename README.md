@@ -1,5 +1,7 @@
 # whisper-input-next-mac-kit
 
+**English** · [中文说明](README_zh-CN.md)
+
 A one-command macOS installer that turns
 [**Whisper-Input-Next**](https://github.com/Mor-Li/Whisper-Input-Next) into a polished,
 always-on **local** voice keyboard — fully offline, free, and private.
@@ -58,6 +60,15 @@ that binary:
 Then restart the service (the installer prints the exact command) and you're done.
 
 ## ▶️ Usage
+
+```mermaid
+flowchart LR
+    A["Focus a text field"] --> B["Tap Right-⌘<br/>🔊 Submarine"]
+    B --> C["Speak"]
+    C --> D["Tap Right-⌘<br/>🔊 Submarine"]
+    D --> E["Local whisper.cpp"]
+    E --> F["🔔 Glass<br/>text pasted at cursor"]
+```
 
 1. Focus any text field.
 2. **Tap Right-⌘** → *Submarine* sound = recording.
