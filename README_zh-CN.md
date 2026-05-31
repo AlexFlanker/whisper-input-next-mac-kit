@@ -17,6 +17,7 @@
 - 🧠 **Ctrl+F 也走本地** whisper.cpp（上游只把本地绑在 Ctrl+I）。
 - 🚀 **launchd 开机自启服务**——登录即启动、崩溃自拉起、**无终端窗口**、常驻到关机。
 - ✍️ **中文标点更好**（本地模式）—— prompt 引导出标点 + 半角转全角「，。！？」，均可配置。
+- 🤖 **在 Claude 桌面里管理它** —— 一个极薄的 [MCP 服务](mcp/)，**直接问**就能查状态、看日志、改配置、换模型——不用做任何 UI。
 - 🩹 修复上游 `start.sh` 的依赖检测 bug。
 - ⚙️ **全自动**——uv 虚拟环境、依赖、`whisper-cpp`、模型下载、`.env`、launchd 代理，全部按**你这台机器**的真实路径配好。
 
@@ -92,6 +93,14 @@ tail -f ~/Whisper-Input-Next/logs/launchd.err.log                # 看日志
 ```
 
 > 菜单栏的「Quit」会因 `KeepAlive` 被自动拉起；要真停用 `bootout` / `uninstall.sh`。
+
+## 🤖 在 Claude 桌面里管理（MCP）
+
+懒得记 `launchctl`？kit 附带一个极薄的 [**MCP 服务**](mcp/)，让你在 Claude 桌面里用大白话把整个服务跑起来——查状态、看日志、换提示音、切模型。不用 App，也不用做仪表盘。
+
+![在 Claude 桌面里问听写服务状态](docs/mcp-status.png)
+
+只需两步——把 SDK 装进 app 的 venv，再往 `claude_desktop_config.json` 加一条配置——都写在 [`mcp/README.md`](mcp/README.md) 里。
 
 ## 🔍 原理
 

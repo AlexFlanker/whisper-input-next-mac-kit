@@ -26,6 +26,7 @@ app, including chat boxes, editors, and IDEs.
 - 🚀 **launchd auto-start service** — starts at login, restarts on crash, **no terminal
   window**, runs until you shut down.
 - ✍️ **Better Chinese punctuation** (local mode) — prompt-guided punctuation + half→full-width CJK normalization, both configurable.
+- 🤖 **Manage it from Claude Desktop** — a thin [MCP server](mcp/) to check status, read logs, tweak config, and switch models by just *asking* — no UI to build.
 - 🩹 **Bug fix** for upstream's `start.sh` dependency check.
 - ⚙️ **Turn-key setup** — uv venv, dependencies, `whisper-cpp`, model download, `.env`, and
   the launchd agent, all wired with the correct paths for *your* machine.
@@ -107,6 +108,17 @@ tail -f ~/Whisper-Input-Next/logs/launchd.err.log                # logs
 
 > The menu-bar **Quit** item relaunches due to `KeepAlive`; use `bootout` / `uninstall.sh`
 > to actually stop it.
+
+## 🤖 Manage from Claude Desktop (MCP)
+
+Prefer to *ask* instead of remembering `launchctl`? The kit ships a thin
+[**MCP server**](mcp/) so you can run the whole thing from Claude Desktop — check status,
+read logs, change sounds, switch models — in plain language. No app, no dashboard to build.
+
+![asking Claude Desktop for the dictation service status](docs/mcp-status.png)
+
+Setup is two steps — install the SDK into the app venv and add one entry to
+`claude_desktop_config.json` — both documented in [`mcp/README.md`](mcp/README.md).
 
 ## 🔍 How it works
 
