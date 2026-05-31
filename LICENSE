@@ -2,11 +2,6 @@ MIT License
 
 Copyright (c) 2026 Tianjie Sun (@AlexFlanker)
 
-This license covers ONLY the original contents of this kit (the installer,
-patcher, templates, and documentation). It does NOT cover the upstream
-Whisper-Input-Next / Whisper-Input projects, which this kit fetches from their
-official repositories at install time and does not redistribute. See CREDITS.md.
-
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
 in the Software without restriction, including without limitation the rights
