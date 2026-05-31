@@ -10,6 +10,8 @@ Tap a key, speak, and your words are transcribed on-device by
 [whisper.cpp](https://github.com/ggml-org/whisper.cpp) and pasted at your cursor — in any
 app, including chat boxes, editors, and IDEs.
 
+![Demo — dictating into the Claude Code chat box with a tap of Right-Command](docs/demo.gif)
+
 > **This kit does not contain or redistribute upstream source code.** The installer clones
 > the official Whisper-Input-Next repo onto your machine and layers a few enhancements on
 > top. All credit for the core tool goes to the upstream authors — see

@@ -6,6 +6,8 @@
 
 轻点一个键、说话，[whisper.cpp](https://github.com/ggml-org/whisper.cpp) 在你本机把语音转成文字并粘到光标处——任何 App 都能用，包括聊天框、编辑器、IDE。
 
+![演示 — 在 Claude Code 聊天框里轻点右⌘、说话，文字就出现了](docs/demo.gif)
+
 > **本 kit 不包含、也不再发布上游任何源码。** 安装脚本在你本机从官方仓库克隆 Whisper-Input-Next，再在其上叠加我们的增强。核心工具的全部功劳归上游作者——见 [CREDITS.md](CREDITS.md)。
 
 ## ✨ 这个 kit 在上游之上加了什么
