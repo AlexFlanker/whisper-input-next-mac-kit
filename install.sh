@@ -82,7 +82,7 @@ else
 fi
 
 # ---------- enhancements ----------
-c "Applying enhancements (sound cues / right-Cmd toggle / Ctrl+F->local / start.sh fix) ..."
+c "Applying enhancements (sound cues / right-Cmd toggle / Ctrl+F->local / punctuation / archive-cleanup) ..."
 "$VENV_PY" "$KIT_DIR/scripts/apply_enhancements.py" "$APP_DIR"
 
 # ---------- .env ----------
@@ -136,6 +136,7 @@ cat <<BANNER
      launchctl kickstart -k gui/${UID_NUM}/${LABEL}   # start / restart
      launchctl bootout    gui/${UID_NUM}/${LABEL}     # stop
      tail -f "$APP_DIR/logs/launchd.err.log"          # view logs
+     "$KIT_DIR/install-mcp.sh"                         # (optional) manage from Claude Desktop via MCP
      "$KIT_DIR/uninstall.sh"                           # uninstall
 
 ============================================================

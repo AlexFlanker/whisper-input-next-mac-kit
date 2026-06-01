@@ -155,20 +155,26 @@ def list_models() -> dict:
 
 @mcp.tool()
 def download_model(name: str) -> dict:
-    """Download a whisper.cpp ggml model from HuggingFace (e.g. 'large-v3-turbo')."""
+    """Download a whisper.cpp ggml model (e.g. 'large-v3-turbo'); falls back to hf-mirror.com."""
     base = name[len("ggml-"):-4] if name.startswith("ggml-") and name.endswith(".bin") else name
     fname = f"ggml-{base}.bin"
     target = MODELS_DIR / fname
     if target.exists():
         return {"ok": True, "model": fname, "note": "already present"}
     MODELS_DIR.mkdir(parents=True, exist_ok=True)
-    url = f"https://huggingface.co/ggerganov/whisper.cpp/resolve/main/{fname}"
-    r = subprocess.run(["curl", "-L", "--fail", "-o", str(target), url], capture_output=True, text=True)
-    if r.returncode != 0:
+    urls = [
+        f"https://huggingface.co/ggerganov/whisper.cpp/resolve/main/{fname}",
+        f"https://hf-mirror.com/ggerganov/whisper.cpp/resolve/main/{fname}",  # GFW-friendly fallback
+    ]
+    last_err = ""
+    for url in urls:
+        r = subprocess.run(["curl", "-L", "--fail", "-o", str(target), url], capture_output=True, text=True)
+        if r.returncode == 0:
+            return {"ok": True, "model": fname, "size_mb": round(target.stat().st_size / 1e6, 1), "source": url}
+        last_err = (r.stderr or "download failed")[-300:]
         if target.exists():
             target.unlink()
-        return {"ok": False, "error": (r.stderr or "download failed")[-300:], "url": url}
-    return {"ok": True, "model": fname, "size_mb": round(target.stat().st_size / 1e6, 1)}
+    return {"ok": False, "error": last_err, "urls": urls}
 
 
 @mcp.tool()

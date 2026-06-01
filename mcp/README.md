@@ -24,17 +24,31 @@ and the client spawns it on demand over stdio.
 `set_config` only writes an allow-listed set of keys (sounds, model path, punctuation,
 archive retention, a few feature toggles) — it cannot write arbitrary keys.
 
-## Requirements
+## Quick setup (recommended)
 
-The MCP SDK in the app's venv:
+From the kit directory, after `./install.sh`:
 
 ```bash
-~/Whisper-Input-Next/.venv/bin/python -m pip install "mcp[cli]"
+./install-mcp.sh
 ```
 
-## Register with Claude Desktop
+That installs the `mcp` SDK into the app venv and merges a `whisper-input` entry into
+Claude Desktop's config (keeping any servers you already have). It refuses to run while
+Claude Desktop is open — quit it first (it rewrites its own config). Then open Claude
+Desktop and ask *"What's my dictation service status?"*.
 
-Edit `~/Library/Application Support/Claude/claude_desktop_config.json` and add an entry
+Override the defaults with env vars if your install differs:
+`WIN_APP_DIR`, `WIN_LABEL`, `WIN_MCP_NAME`.
+
+## Manual setup
+
+If you'd rather do it by hand — install the SDK into the app venv:
+
+```bash
+~/Whisper-Input-Next/.venv/bin/python -m pip install mcp
+```
+
+then edit `~/Library/Application Support/Claude/claude_desktop_config.json` and add an entry
 under `mcpServers` (adjust the two paths and the label to match your install):
 
 ```json
@@ -67,3 +81,11 @@ service status?"* — it should call the `status` tool.
 |---|---|---|
 | `WIN_APP_DIR` | `~/Whisper-Input-Next` | the upstream app checkout |
 | `WIN_LABEL` | `com.whisper-input-next.kit` | launchd label of the service |
+| `WIN_MCP_NAME` | `whisper-input` | the key written under `mcpServers` |
+
+## Uninstall
+
+The kit's `./uninstall.sh` removes this `whisper-input` entry from Claude Desktop's config
+for you (quit Claude Desktop first — it rewrites the file on its own). To do it by hand,
+delete the `whisper-input` object under `mcpServers` in
+`~/Library/Application Support/Claude/claude_desktop_config.json`.

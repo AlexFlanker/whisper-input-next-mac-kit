@@ -13,10 +13,11 @@
 ## ✨ 这个 kit 在上游之上加了什么
 
 - 🎙️ **轻点右 ⌘ 开始/停止**——单键切换，不用别扭的组合键，不和 App 冲突。
-- 🔊 **声音提示**——开始/停止是 *Submarine*（声纳），文字粘好是 *Glass*（叮咚）。凭耳朵操作，全程不用盯屏幕。
+- 🔊 **声音提示**——开始/停止是 *Submarine*（声纳），文字粘好是 *Glass*（叮咚）。凭耳朵操作，全程不用盯屏幕。每个提示音都可用环境变量改（`SOUND_START`/`SOUND_STOP`/`SOUND_DONE`/`SOUND_ERROR`/`SOUND_WARNING`）。
 - 🧠 **Ctrl+F 也走本地** whisper.cpp（上游只把本地绑在 Ctrl+I）。
 - 🚀 **launchd 开机自启服务**——登录即启动、崩溃自拉起、**无终端窗口**、常驻到关机。
-- ✍️ **中文标点更好**（本地模式）—— prompt 引导出标点 + 半角转全角「，。！？」，均可配置。
+- ✍️ **中文标点更好**（本地模式）—— prompt 引导出标点 + 半角转全角「，。！？：；」，均可配置。
+- 🧹 **录音归档自动清理**——超过 `AUDIO_ARCHIVE_RETENTION_HOURS`（默认 24 小时）的旧录音连同缓存条目，会在启动时和定期被删除，不会越堆越多。
 - 🤖 **在 Claude 桌面里管理它** —— 一个极薄的 [MCP 服务](mcp/)，**直接问**就能查状态、看日志、改配置、换模型——不用做任何 UI。
 - 🩹 修复上游 `start.sh` 的依赖检测 bug。
 - ⚙️ **全自动**——uv 虚拟环境、依赖、`whisper-cpp`、模型下载、`.env`、launchd 代理，全部按**你这台机器**的真实路径配好。
@@ -83,6 +84,16 @@ flowchart LR
 WIN_MODEL=large-v3 ./install.sh   # 例如用完整 large-v3 模型安装
 ```
 
+**运行时开关**在生成的 `~/Whisper-Input-Next/.env` 里（改完重启服务即可，也可以在 Claude 桌面里通过 MCP 改）：
+
+| 键 | 默认 | 说明 |
+|---|---|---|
+| `SOUND_START` / `SOUND_STOP` / `SOUND_DONE` / `SOUND_ERROR` / `SOUND_WARNING` | Submarine / Submarine / Glass / Basso / Funk | `/System/Library/Sounds` 里的任意音名 |
+| `WHISPER_PROMPT` | `以下是一段普通话…` | 引导标点的 prompt；置空则不加标点 |
+| `WHISPER_FULLWIDTH_PUNCT` | `true` | 半角转全角中文标点 |
+| `AUDIO_ARCHIVE_RETENTION_HOURS` | `24` | 删除超过此时长的录音；`<0` 关闭 |
+| `AUDIO_ARCHIVE_CLEANUP_INTERVAL_HOURS` | `6` | 后台定期清理的间隔 |
+
 ## 🛠️ 管理服务
 
 ```bash
@@ -100,7 +111,13 @@ tail -f ~/Whisper-Input-Next/logs/launchd.err.log                # 看日志
 
 ![在 Claude 桌面里问听写服务状态](docs/mcp-status.png)
 
-只需两步——把 SDK 装进 app 的 venv，再往 `claude_desktop_config.json` 加一条配置——都写在 [`mcp/README.md`](mcp/README.md) 里。
+一条命令搞定（先把 Claude 桌面彻底退出——它会重写自己的配置）：
+
+```bash
+./install-mcp.sh
+```
+
+它会把 `mcp` SDK 装进 app 的 venv，并往 Claude 桌面配置里**合并**一条 `whisper-input`（不动你已有的 server）。细节和手动步骤见 [`mcp/README.md`](mcp/README.md)。
 
 ## 🔍 原理
 

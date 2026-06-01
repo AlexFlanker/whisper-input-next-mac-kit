@@ -6,11 +6,16 @@ well-defined, idempotent insertions into the files of a checkout you cloned your
 the official repository. Safe to run multiple times.
 
 Enhancements applied:
-  * Sound cues (macOS system sounds via afplay): start/stop = Submarine, done = Glass.
+  * Sound cues (macOS system sounds via afplay), each overridable by env var
+    (SOUND_START/SOUND_STOP/SOUND_DONE/SOUND_ERROR/SOUND_WARNING; defaults
+    Submarine/Submarine/Glass/Basso/Funk).
   * Single-tap Right-Command toggle (tap right cmd to start/stop recording).
   * Ctrl+F also routes to local whisper.cpp when TRANSCRIPTION_SERVICE=local.
   * start.sh dependency-check fix.
   * Local-mode punctuation: prompt-guided punctuation + half->full-width CJK punctuation.
+  * Audio-archive auto-cleanup: delete recordings older than
+    AUDIO_ARCHIVE_RETENTION_HOURS (default 24) at startup + every
+    AUDIO_ARCHIVE_CLEANUP_INTERVAL_HOURS (default 6); prunes cache.json.
 
 Targets upstream commit 5edec44bd66ca0a75c75c485d5af2fd201ce8c17. If you pin a different
 commit and an anchor no longer matches, this script tells you which one and stops.
@@ -21,17 +26,23 @@ import py_compile
 
 PIN_COMMIT = "5edec44bd66ca0a75c75c485d5af2fd201ce8c17"
 
-_SOUND_BLOCK = '''# ── 状态提示音（macOS 系统音，afplay 异步播放，不阻塞主流程）────────────
+_SOUND_BLOCK = '''# ── 状态提示音（macOS 系统音，afplay 异步播放，不阻塞主流程）────────────────
+# 提示音可用环境变量覆盖（macOS 系统音名，见 /System/Library/Sounds）
+_SOUND_START = os.getenv("SOUND_START", "Submarine")
+_SOUND_STOP = os.getenv("SOUND_STOP", "Submarine")
+_SOUND_DONE = os.getenv("SOUND_DONE", "Glass")
+_SOUND_ERROR = os.getenv("SOUND_ERROR", "Basso")
+_SOUND_WARNING = os.getenv("SOUND_WARNING", "Funk")
 _SOUND_FOR_STATE = {
-    InputState.RECORDING: "Submarine",            # 开始录音
-    InputState.RECORDING_TRANSLATE: "Submarine",
-    InputState.RECORDING_KIMI: "Submarine",
-    InputState.DOUBAO_STREAMING: "Submarine",
-    InputState.PROCESSING: "Submarine",            # 停止录音、开始转录
-    InputState.PROCESSING_KIMI: "Submarine",
-    InputState.TRANSLATING: "Submarine",
-    InputState.ERROR: "Basso",               # 出错
-    InputState.WARNING: "Funk",              # 警告（如录音过短）
+    InputState.RECORDING: _SOUND_START,            # 开始录音
+    InputState.RECORDING_TRANSLATE: _SOUND_START,
+    InputState.RECORDING_KIMI: _SOUND_START,
+    InputState.DOUBAO_STREAMING: _SOUND_START,
+    InputState.PROCESSING: _SOUND_STOP,            # 停止录音、开始转录
+    InputState.PROCESSING_KIMI: _SOUND_STOP,
+    InputState.TRANSLATING: _SOUND_STOP,
+    InputState.ERROR: _SOUND_ERROR,                # 出错
+    InputState.WARNING: _SOUND_WARNING,            # 警告（如录音过短）
 }
 
 
@@ -105,7 +116,7 @@ EDITS = [
             '        )\n'
             '        # 处理中 -> 空闲：转录成功并已粘贴 → 成功音\n'
             '        if new_state == InputState.IDLE and prev_state in processing:\n'
-            '            _play_sound("Glass")\n'
+            '            _play_sound(_SOUND_DONE)\n'
             '            return\n'
             '        sound = _SOUND_FOR_STATE.get(new_state)\n'
             '        if sound:\n'
@@ -240,6 +251,83 @@ EDITS = [
             '            return result_txt',
         desc="local: apply fullwidth punctuation to result",
     ),
+    # ---- src/audio/archive.py (auto-cleanup of old recordings) ----
+    dict(
+        file="src/audio/archive.py",
+        marker="import threading\nimport time",  # combined: a partial-divergent upstream can't skip half this edit
+        old="import os\nimport json\nimport shutil\nfrom datetime import datetime\n",
+        new="import os\nimport json\nimport shutil\nimport threading\nimport time\nfrom datetime import datetime\n",
+        desc="archive: import threading + time",
+    ),
+    dict(
+        file="src/audio/archive.py",
+        marker="self.retention_hours",
+        old='        self.audio_dir = os.path.join(self.archive_dir, "audio")\n'
+            '        self.ensure_directory()\n'
+            '\n'
+            '    def ensure_directory(self) -> None:',
+        new='        self.audio_dir = os.path.join(self.archive_dir, "audio")\n'
+            '        self.ensure_directory()\n'
+            '        # 自动清理：删除超过保留时长的归档（启动时清一次 + 定期后台线程）\n'
+            '        self.retention_hours = float(os.getenv("AUDIO_ARCHIVE_RETENTION_HOURS", "24"))\n'
+            '        self.cleanup_interval_hours = float(os.getenv("AUDIO_ARCHIVE_CLEANUP_INTERVAL_HOURS", "6"))\n'
+            '        self.cleanup()\n'
+            '        self._start_periodic_cleanup()\n'
+            '\n'
+            '    def ensure_directory(self) -> None:',
+        desc="archive: __init__ runs cleanup + starts periodic thread",
+    ),
+    dict(
+        file="src/audio/archive.py",
+        marker="def _start_periodic_cleanup",
+        old='        self.save_transcription_cache(cache)',
+        new='        self.save_transcription_cache(cache)\n'
+            '\n'
+            '    def cleanup(self, retention_hours: Optional[float] = None) -> None:\n'
+            '        """删除超过保留时长的归档 WAV，并同步清理 cache.json（retention_hours<0 表示不清理）。"""\n'
+            '        if retention_hours is None:\n'
+            '            retention_hours = getattr(self, "retention_hours", 24.0)\n'
+            '        if retention_hours < 0 or not os.path.isdir(self.audio_dir):\n'
+            '            return\n'
+            '        cutoff = time.time() - retention_hours * 3600\n'
+            '        deleted = 0\n'
+            '        for name in os.listdir(self.audio_dir):\n'
+            '            if not name.endswith(".wav"):\n'
+            '                continue\n'
+            '            path = os.path.join(self.audio_dir, name)\n'
+            '            try:\n'
+            '                if os.path.getmtime(path) < cutoff:\n'
+            '                    os.remove(path)\n'
+            '                    deleted += 1\n'
+            '            except OSError:\n'
+            '                pass\n'
+            '        if deleted:\n'
+            '            try:\n'
+            '                existing = {n for n in os.listdir(self.audio_dir) if n.endswith(".wav")}\n'
+            '                cache = self.load_transcription_cache()\n'
+            '                pruned = {k: v for k, v in cache.items() if k in existing}\n'
+            '                if len(pruned) != len(cache):\n'
+            '                    self.save_transcription_cache(pruned)\n'
+            '            except Exception:  # noqa: BLE001\n'
+            '                pass\n'
+            '            logger.info(f"音频归档清理：删除 {deleted} 个过期录音（保留 {retention_hours:g}h）")\n'
+            '\n'
+            '    def _start_periodic_cleanup(self) -> None:\n'
+            '        interval = getattr(self, "cleanup_interval_hours", 6.0)\n'
+            '        if interval <= 0:\n'
+            '            return\n'
+            '\n'
+            '        def _loop() -> None:\n'
+            '            while True:\n'
+            '                time.sleep(interval * 3600)\n'
+            '                try:\n'
+            '                    self.cleanup()\n'
+            '                except Exception as exc:  # noqa: BLE001\n'
+            '                    logger.debug(f"定期清理异常: {exc}")\n'
+            '\n'
+            '        threading.Thread(target=_loop, name="archive-cleanup", daemon=True).start()',
+        desc="archive: cleanup() + _start_periodic_cleanup()",
+    ),
 ]
 
 
@@ -277,7 +365,7 @@ def main():
         print(f"  [ok]   {e['file']}: {e['desc']}")
 
     # syntax check the python files we touched
-    for rel in ("main.py", "src/keyboard/listener.py", "src/transcription/local_whisper.py"):
+    for rel in ("main.py", "src/keyboard/listener.py", "src/transcription/local_whisper.py", "src/audio/archive.py"):
         p = os.path.join(app_dir, rel)
         if os.path.isfile(p):
             try:

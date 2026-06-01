@@ -21,11 +21,14 @@ app, including chat boxes, editors, and IDEs.
 
 - 🎙️ **Tap Right-⌘ to start/stop** — single-tap toggle, no awkward chord, no app conflicts.
 - 🔊 **Audio cues** — *Submarine* on start/stop, *Glass* when the text is pasted. Operate by
-  ear; you never need to look at a terminal.
+  ear; you never need to look at a terminal. Each sound is overridable via env
+  (`SOUND_START` / `SOUND_STOP` / `SOUND_DONE` / `SOUND_ERROR` / `SOUND_WARNING`).
 - 🧠 **Ctrl+F also routes to local** whisper.cpp (upstream wires local to Ctrl+I only).
 - 🚀 **launchd auto-start service** — starts at login, restarts on crash, **no terminal
   window**, runs until you shut down.
 - ✍️ **Better Chinese punctuation** (local mode) — prompt-guided punctuation + half→full-width CJK normalization, both configurable.
+- 🧹 **Audio-archive auto-cleanup** — old recordings and their cache entries are deleted after
+  `AUDIO_ARCHIVE_RETENTION_HOURS` (default 24h), at startup and periodically. Nothing piles up.
 - 🤖 **Manage it from Claude Desktop** — a thin [MCP server](mcp/) to check status, read logs, tweak config, and switch models by just *asking* — no UI to build.
 - 🩹 **Bug fix** for upstream's `start.sh` dependency check.
 - ⚙️ **Turn-key setup** — uv venv, dependencies, `whisper-cpp`, model download, `.env`, and
@@ -97,6 +100,17 @@ Override any of these as environment variables when running `./install.sh`:
 WIN_MODEL=large-v3 ./install.sh   # e.g. install with the full large-v3 model
 ```
 
+**Runtime knobs** live in the generated `~/Whisper-Input-Next/.env` (edit and restart the
+service, or change them from Claude Desktop via the MCP server):
+
+| Key | Default | Notes |
+|---|---|---|
+| `SOUND_START` / `SOUND_STOP` / `SOUND_DONE` / `SOUND_ERROR` / `SOUND_WARNING` | Submarine / Submarine / Glass / Basso / Funk | any name in `/System/Library/Sounds` |
+| `WHISPER_PROMPT` | `以下是一段普通话…` | punctuation-guiding prompt; empty = no punctuation |
+| `WHISPER_FULLWIDTH_PUNCT` | `true` | convert half→full-width CJK punctuation |
+| `AUDIO_ARCHIVE_RETENTION_HOURS` | `24` | delete recordings older than this; `<0` disables |
+| `AUDIO_ARCHIVE_CLEANUP_INTERVAL_HOURS` | `6` | how often the background cleanup runs |
+
 ## 🛠️ Managing the service
 
 ```bash
@@ -117,8 +131,15 @@ read logs, change sounds, switch models — in plain language. No app, no dashbo
 
 ![asking Claude Desktop for the dictation service status](docs/mcp-status.png)
 
-Setup is two steps — install the SDK into the app venv and add one entry to
-`claude_desktop_config.json` — both documented in [`mcp/README.md`](mcp/README.md).
+One command sets it up (quit Claude Desktop first — it rewrites its own config):
+
+```bash
+./install-mcp.sh
+```
+
+It installs the `mcp` SDK into the app venv and merges a `whisper-input` entry into Claude
+Desktop's config (existing servers untouched). Details + manual steps in
+[`mcp/README.md`](mcp/README.md).
 
 ## 🔍 How it works
 
