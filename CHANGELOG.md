@@ -3,6 +3,16 @@
 All notable changes to this kit are documented here.
 This project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.1.3] — 2026-05-31
+
+### Added
+- **On-screen listening indicator** — a bottom-center, click-through overlay that floats over
+  any app: a breathing ring while recording, a spinner while transcribing, and a green
+  expand-and-fade burst when the text is pasted. Fully transparent (no panel chrome) with a
+  soft glow so it blends into the background. Toggle with `SHOW_INDICATOR` (default on); also
+  settable from the MCP server. The UI component (`src/ui/listening_indicator.py`) is
+  kit-owned (MIT) and copied in by `install.sh`; the patcher only wires the `main.py` hooks.
+
 ## [0.1.2] — 2026-05-31
 
 ### Added

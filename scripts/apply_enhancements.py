@@ -16,6 +16,10 @@ Enhancements applied:
   * Audio-archive auto-cleanup: delete recordings older than
     AUDIO_ARCHIVE_RETENTION_HOURS (default 24) at startup + every
     AUDIO_ARCHIVE_CLEANUP_INTERVAL_HOURS (default 6); prunes cache.json.
+  * Bottom-center "listening indicator" overlay (breathing ring while recording,
+    spinner while transcribing, green burst on done); SHOW_INDICATOR=false disables.
+    The UI component (src/ui/listening_indicator.py) is kit-owned (MIT) and is copied
+    in by install.sh; this patcher only wires the main.py hooks.
 
 Targets upstream commit 5edec44bd66ca0a75c75c485d5af2fd201ce8c17. If you pin a different
 commit and an anchor no longer matches, this script tells you which one and stops.
@@ -328,6 +332,69 @@ EDITS = [
             '        threading.Thread(target=_loop, name="archive-cleanup", daemon=True).start()',
         desc="archive: cleanup() + _start_periodic_cleanup()",
     ),
+    # ---- 听写指示器集成（main.py 钩子；UI 组件文件由 install.sh 单独拷贝进 src/ui/）----
+    dict(
+        file="main.py",
+        marker="import ListeningIndicator",
+        old="from src.ui.floating_preview import FloatingPreviewWindow\n",
+        new="from src.ui.floating_preview import FloatingPreviewWindow\n"
+            "from src.ui.listening_indicator import ListeningIndicator\n",
+        desc="indicator: import ListeningIndicator",
+    ),
+    dict(
+        file="main.py",
+        marker="_SHOW_INDICATOR",
+        old="_SOUND_FOR_STATE = {",
+        new="# 底部居中的听写指示器浮窗（呼吸光环/旋转弧）；SHOW_INDICATOR=false 关闭\n"
+            "_SHOW_INDICATOR = os.getenv(\"SHOW_INDICATOR\", \"true\").lower() == \"true\"\n"
+            "_SOUND_FOR_STATE = {",
+        desc="indicator: SHOW_INDICATOR flag",
+    ),
+    dict(
+        file="main.py",
+        marker="self.listening_indicator =",
+        old="        self.floating_preview = FloatingPreviewWindow()",
+        new="        self.floating_preview = FloatingPreviewWindow()\n"
+            "        self.listening_indicator = ListeningIndicator() if _SHOW_INDICATOR else None",
+        desc="indicator: instantiate (gated by SHOW_INDICATOR)",
+    ),
+    dict(
+        file="main.py",
+        marker="def _update_indicator",
+        old="        self._play_state_sound(prev_state, new_state)\n"
+            "\n"
+            "    def _play_state_sound(self, prev_state: InputState, new_state: InputState):",
+        new="        self._play_state_sound(prev_state, new_state)\n"
+            "        self._update_indicator(prev_state, new_state)\n"
+            "\n"
+            "    def _update_indicator(self, prev_state: InputState, new_state: InputState):\n"
+            '        """底部听写指示器：录音→呼吸光环，转录中→旋转弧，空闲/错误→隐藏。"""\n'
+            "        if self.listening_indicator is None:\n"
+            "            return\n"
+            "        recording = (\n"
+            "            InputState.RECORDING,\n"
+            "            InputState.RECORDING_TRANSLATE,\n"
+            "            InputState.RECORDING_KIMI,\n"
+            "            InputState.DOUBAO_STREAMING,\n"
+            "        )\n"
+            "        processing = (\n"
+            "            InputState.PROCESSING,\n"
+            "            InputState.PROCESSING_KIMI,\n"
+            "            InputState.TRANSLATING,\n"
+            "        )\n"
+            "        if new_state in recording:\n"
+            "            self.listening_indicator.show_recording()\n"
+            "        elif new_state in processing:\n"
+            "            self.listening_indicator.show_processing()\n"
+            "        elif new_state == InputState.IDLE and prev_state in processing:\n"
+            '            # 转录成功并已粘贴：播放"完成"扩散淡出动画\n'
+            "            self.listening_indicator.complete()\n"
+            "        else:\n"
+            "            self.listening_indicator.hide()\n"
+            "\n"
+            "    def _play_state_sound(self, prev_state: InputState, new_state: InputState):",
+        desc="indicator: _on_state_change hook + _update_indicator()",
+    ),
 ]
 
 
@@ -365,7 +432,8 @@ def main():
         print(f"  [ok]   {e['file']}: {e['desc']}")
 
     # syntax check the python files we touched
-    for rel in ("main.py", "src/keyboard/listener.py", "src/transcription/local_whisper.py", "src/audio/archive.py"):
+    for rel in ("main.py", "src/keyboard/listener.py", "src/transcription/local_whisper.py",
+                "src/audio/archive.py", "src/ui/listening_indicator.py"):
         p = os.path.join(app_dir, rel)
         if os.path.isfile(p):
             try:

@@ -81,8 +81,13 @@ else
   fi
 fi
 
+# ---------- kit-owned UI component (listening indicator; not upstream code) ----------
+c "Installing the listening-indicator overlay ..."
+mkdir -p "$APP_DIR/src/ui"
+cp "$KIT_DIR/payload/listening_indicator.py" "$APP_DIR/src/ui/listening_indicator.py"
+
 # ---------- enhancements ----------
-c "Applying enhancements (sound cues / right-Cmd toggle / Ctrl+F->local / punctuation / archive-cleanup) ..."
+c "Applying enhancements (sounds / right-Cmd toggle / Ctrl+F->local / punctuation / cleanup / indicator) ..."
 "$VENV_PY" "$KIT_DIR/scripts/apply_enhancements.py" "$APP_DIR"
 
 # ---------- .env ----------

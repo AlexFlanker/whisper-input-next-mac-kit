@@ -29,6 +29,9 @@ app, including chat boxes, editors, and IDEs.
 - ✍️ **Better Chinese punctuation** (local mode) — prompt-guided punctuation + half→full-width CJK normalization, both configurable.
 - 🧹 **Audio-archive auto-cleanup** — old recordings and their cache entries are deleted after
   `AUDIO_ARCHIVE_RETENTION_HOURS` (default 24h), at startup and periodically. Nothing piles up.
+- 🟢 **On-screen listening indicator** — a bottom-center overlay that floats over any app: a
+  breathing ring while recording, a spinner while transcribing, a green burst when your text
+  lands. Click-through, blends into the background. `SHOW_INDICATOR=false` disables it.
 - 🤖 **Manage it from Claude Desktop** — a thin [MCP server](mcp/) to check status, read logs, tweak config, and switch models by just *asking* — no UI to build.
 - 🩹 **Bug fix** for upstream's `start.sh` dependency check.
 - ⚙️ **Turn-key setup** — uv venv, dependencies, `whisper-cpp`, model download, `.env`, and
@@ -110,6 +113,7 @@ service, or change them from Claude Desktop via the MCP server):
 | `WHISPER_FULLWIDTH_PUNCT` | `true` | convert half→full-width CJK punctuation |
 | `AUDIO_ARCHIVE_RETENTION_HOURS` | `24` | delete recordings older than this; `<0` disables |
 | `AUDIO_ARCHIVE_CLEANUP_INTERVAL_HOURS` | `6` | how often the background cleanup runs |
+| `SHOW_INDICATOR` | `true` | bottom-center recording/transcribing overlay; `false` to disable |
 
 ## 🛠️ Managing the service
 
