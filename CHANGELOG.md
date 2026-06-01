@@ -3,6 +3,18 @@
 All notable changes to this kit are documented here.
 This project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.1.4] — 2026-05-31
+
+### Added
+- **Second indicator style: `capsule`** — a pill that appears while recording (with three
+  pulsing dots), **retracts** into a small circle + spinner while transcribing, then turns
+  **green and fades** on success. Pick your style with **`INDICATOR_STYLE`** (`ring` |
+  `capsule`, default `ring`); the app selects it via a small factory. New kit-owned UI file
+  `src/ui/capsule_indicator.py` (MIT), copied in by `install.sh`.
+- **Switch the indicator from Claude Desktop** — the MCP server gains a `set_indicator_style`
+  tool (`ring` / `capsule` / `off`) that writes the config **and** restarts in one call;
+  `INDICATOR_STYLE` is in the writable allowlist and the current style shows in `status`.
+
 ## [0.1.3] — 2026-05-31
 
 ### Added

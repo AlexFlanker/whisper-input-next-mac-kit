@@ -30,7 +30,7 @@ ALLOWED_KEYS = {
     "WHISPER_MODEL_PATH", "WHISPER_PROMPT", "WHISPER_FULLWIDTH_PUNCT",
     "AUDIO_ARCHIVE_RETENTION_HOURS", "AUDIO_ARCHIVE_CLEANUP_INTERVAL_HOURS",
     "SOUND_START", "SOUND_STOP", "SOUND_DONE", "SOUND_ERROR", "SOUND_WARNING",
-    "SHOW_INDICATOR",
+    "SHOW_INDICATOR", "INDICATOR_STYLE",
     "TRANSCRIPTIONS_BUTTON", "TRANSLATIONS_BUTTON", "TRANSCRIPTION_SERVICE",
     "CONVERT_TO_SIMPLIFIED", "ADD_SYMBOL", "OPTIMIZE_RESULT", "AUTO_RETRY_LIMIT",
 }
@@ -94,6 +94,10 @@ def status() -> dict:
         "punctuation_prompt_on": bool(cfg.get("WHISPER_PROMPT")),
         "fullwidth_punct": cfg.get("WHISPER_FULLWIDTH_PUNCT", "true"),
         "archive_retention_hours": cfg.get("AUDIO_ARCHIVE_RETENTION_HOURS", "24"),
+        "indicator": {
+            "show": cfg.get("SHOW_INDICATOR", "true"),
+            "style": cfg.get("INDICATOR_STYLE", "ring"),
+        },
         "hotkey": "tap Right-Cmd (or "
                   f"{cfg.get('TRANSLATIONS_BUTTON', 'ctrl')}+{cfg.get('TRANSCRIPTIONS_BUTTON', 'f')})",
     }
@@ -129,6 +133,34 @@ def restart() -> dict:
     """Restart the dictation service so config changes take effect."""
     _launchctl("kickstart", "-k", f"gui/{_uid()}/{LABEL}")
     return {"ok": True, "note": "service restarted"}
+
+
+@mcp.tool()
+def set_indicator_style(style: str, restart_now: bool = True) -> dict:
+    """Switch the on-screen listening indicator and (by default) restart to apply it.
+
+    style:
+      'ring'    — transparent glowing breathing ring (bottom-center)
+      'capsule' — a pill that retracts to a spinner, green on done
+      'off'     — hide the indicator entirely
+    """
+    s = (style or "").strip().lower()
+    if s in ("off", "none", "false", "hidden", "hide"):
+        _write_env_key("SHOW_INDICATOR", "false")
+        applied = {"SHOW_INDICATOR": "false"}
+    elif s in ("ring", "capsule"):
+        _write_env_key("SHOW_INDICATOR", "true")
+        _write_env_key("INDICATOR_STYLE", s)
+        applied = {"SHOW_INDICATOR": "true", "INDICATOR_STYLE": s}
+    else:
+        return {"ok": False, "error": f"unknown style: {style!r}", "valid": ["ring", "capsule", "off"]}
+    result = {"ok": True, "applied": applied}
+    if restart_now:
+        _launchctl("kickstart", "-k", f"gui/{_uid()}/{LABEL}")
+        result["restarted"] = True
+    else:
+        result["note"] = "call restart() to apply"
+    return result
 
 
 @mcp.tool()

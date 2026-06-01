@@ -18,7 +18,7 @@
 - 🚀 **launchd 开机自启服务**——登录即启动、崩溃自拉起、**无终端窗口**、常驻到关机。
 - ✍️ **中文标点更好**（本地模式）—— prompt 引导出标点 + 半角转全角「，。！？：；」，均可配置。
 - 🧹 **录音归档自动清理**——超过 `AUDIO_ARCHIVE_RETENTION_HOURS`（默认 24 小时）的旧录音连同缓存条目，会在启动时和定期被删除，不会越堆越多。
-- 🟢 **屏幕听写指示器**——屏幕底部居中、浮在任何 App 之上的小圈：录音时呼吸光环，转录时旋转弧，文字落地时绿色扩散一下。点击穿透、融入背景。`SHOW_INDICATOR=false` 关闭。
+- 🟢 **屏幕听写指示器**——屏幕底部居中、点击穿透，两种风格（`INDICATOR_STYLE`）任选：**`ring`**（呼吸光环 → 旋转弧 → 绿色扩散）或 **`capsule`**（胶囊条，录完收起成旋转弧、成功变绿）。可在 Claude 桌面里用 MCP 实时切换；`SHOW_INDICATOR=false` 关闭。
 - 🤖 **在 Claude 桌面里管理它** —— 一个极薄的 [MCP 服务](mcp/)，**直接问**就能查状态、看日志、改配置、换模型——不用做任何 UI。
 - 🩹 修复上游 `start.sh` 的依赖检测 bug。
 - ⚙️ **全自动**——uv 虚拟环境、依赖、`whisper-cpp`、模型下载、`.env`、launchd 代理，全部按**你这台机器**的真实路径配好。
@@ -95,6 +95,7 @@ WIN_MODEL=large-v3 ./install.sh   # 例如用完整 large-v3 模型安装
 | `AUDIO_ARCHIVE_RETENTION_HOURS` | `24` | 删除超过此时长的录音；`<0` 关闭 |
 | `AUDIO_ARCHIVE_CLEANUP_INTERVAL_HOURS` | `6` | 后台定期清理的间隔 |
 | `SHOW_INDICATOR` | `true` | 底部居中的录音/转录指示器；`false` 关闭 |
+| `INDICATOR_STYLE` | `ring` | `ring`（呼吸光环）或 `capsule`（收起式胶囊条） |
 
 ## 🛠️ 管理服务
 

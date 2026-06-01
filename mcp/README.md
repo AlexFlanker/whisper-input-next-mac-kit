@@ -16,6 +16,7 @@ and the client spawns it on demand over stdio.
 | `get_config` | Read the relevant `.env` settings |
 | `set_config` | Set one allow-listed `.env` key (then `restart`) |
 | `restart` | Restart the launchd service to apply changes |
+| `set_indicator_style` | Switch the on-screen indicator (`ring` / `capsule` / `off`) and restart |
 | `recent_transcriptions` | Most recent results the service produced |
 | `list_models` | Downloaded whisper models + which is current |
 | `download_model` | Pull a `ggml-*` model from HuggingFace |

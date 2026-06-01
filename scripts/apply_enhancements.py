@@ -16,10 +16,11 @@ Enhancements applied:
   * Audio-archive auto-cleanup: delete recordings older than
     AUDIO_ARCHIVE_RETENTION_HOURS (default 24) at startup + every
     AUDIO_ARCHIVE_CLEANUP_INTERVAL_HOURS (default 6); prunes cache.json.
-  * Bottom-center "listening indicator" overlay (breathing ring while recording,
-    spinner while transcribing, green burst on done); SHOW_INDICATOR=false disables.
-    The UI component (src/ui/listening_indicator.py) is kit-owned (MIT) and is copied
-    in by install.sh; this patcher only wires the main.py hooks.
+  * Bottom-center "listening indicator" overlay, two styles chosen by INDICATOR_STYLE:
+    'ring' (breathing ring -> spinner -> green burst) or 'capsule' (pill that retracts
+    to a spinner -> green). SHOW_INDICATOR=false disables it. The UI components
+    (src/ui/listening_indicator.py, src/ui/capsule_indicator.py) are kit-owned (MIT)
+    and copied in by install.sh; this patcher only wires the main.py hooks + factory.
 
 Targets upstream commit 5edec44bd66ca0a75c75c485d5af2fd201ce8c17. If you pin a different
 commit and an anchor no longer matches, this script tells you which one and stops.
@@ -347,16 +348,18 @@ EDITS = [
         old="_SOUND_FOR_STATE = {",
         new="# 底部居中的听写指示器浮窗（呼吸光环/旋转弧）；SHOW_INDICATOR=false 关闭\n"
             "_SHOW_INDICATOR = os.getenv(\"SHOW_INDICATOR\", \"true\").lower() == \"true\"\n"
+            "# 指示器风格：ring（呼吸光环，默认）| capsule（胶囊条）\n"
+            "_INDICATOR_STYLE = os.getenv(\"INDICATOR_STYLE\", \"ring\").lower()\n"
             "_SOUND_FOR_STATE = {",
-        desc="indicator: SHOW_INDICATOR flag",
+        desc="indicator: SHOW_INDICATOR + INDICATOR_STYLE flags",
     ),
     dict(
         file="main.py",
         marker="self.listening_indicator =",
         old="        self.floating_preview = FloatingPreviewWindow()",
         new="        self.floating_preview = FloatingPreviewWindow()\n"
-            "        self.listening_indicator = ListeningIndicator() if _SHOW_INDICATOR else None",
-        desc="indicator: instantiate (gated by SHOW_INDICATOR)",
+            "        self.listening_indicator = _make_indicator()",
+        desc="indicator: instantiate via _make_indicator() factory",
     ),
     dict(
         file="main.py",
@@ -394,6 +397,26 @@ EDITS = [
             "\n"
             "    def _play_state_sound(self, prev_state: InputState, new_state: InputState):",
         desc="indicator: _on_state_change hook + _update_indicator()",
+    ),
+    dict(
+        file="main.py",
+        marker="def _make_indicator",
+        old="        pass\n\n\n@dataclass\nclass TranscriptionJob:",
+        new="        pass\n\n\n"
+            "def _make_indicator():\n"
+            '    """根据 SHOW_INDICATOR / INDICATOR_STYLE 选择听写指示器实现（ring|capsule）。"""\n'
+            "    if not _SHOW_INDICATOR:\n"
+            "        return None\n"
+            "    try:\n"
+            '        if _INDICATOR_STYLE == "capsule":\n'
+            "            from src.ui.capsule_indicator import CapsuleIndicator\n"
+            "            return CapsuleIndicator()\n"
+            "        return ListeningIndicator()\n"
+            "    except Exception as exc:  # noqa: BLE001\n"
+            '        logger.warning(f"指示器创建失败 (style={_INDICATOR_STYLE}): {exc}")\n'
+            "        return None\n"
+            "\n\n@dataclass\nclass TranscriptionJob:",
+        desc="indicator: _make_indicator() style factory (ring|capsule)",
     ),
 ]
 
@@ -433,7 +456,7 @@ def main():
 
     # syntax check the python files we touched
     for rel in ("main.py", "src/keyboard/listener.py", "src/transcription/local_whisper.py",
-                "src/audio/archive.py", "src/ui/listening_indicator.py"):
+                "src/audio/archive.py", "src/ui/listening_indicator.py", "src/ui/capsule_indicator.py"):
         p = os.path.join(app_dir, rel)
         if os.path.isfile(p):
             try:

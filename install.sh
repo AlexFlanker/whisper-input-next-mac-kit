@@ -81,10 +81,11 @@ else
   fi
 fi
 
-# ---------- kit-owned UI component (listening indicator; not upstream code) ----------
-c "Installing the listening-indicator overlay ..."
+# ---------- kit-owned UI components (listening indicators; not upstream code) ----------
+c "Installing the listening-indicator overlays (ring + capsule) ..."
 mkdir -p "$APP_DIR/src/ui"
 cp "$KIT_DIR/payload/listening_indicator.py" "$APP_DIR/src/ui/listening_indicator.py"
+cp "$KIT_DIR/payload/capsule_indicator.py"  "$APP_DIR/src/ui/capsule_indicator.py"
 
 # ---------- enhancements ----------
 c "Applying enhancements (sounds / right-Cmd toggle / Ctrl+F->local / punctuation / cleanup / indicator) ..."
