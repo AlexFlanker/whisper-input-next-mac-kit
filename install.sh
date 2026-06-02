@@ -86,6 +86,7 @@ c "Installing the listening-indicator overlays (ring + capsule) ..."
 mkdir -p "$APP_DIR/src/ui"
 cp "$KIT_DIR/payload/listening_indicator.py" "$APP_DIR/src/ui/listening_indicator.py"
 cp "$KIT_DIR/payload/capsule_indicator.py"  "$APP_DIR/src/ui/capsule_indicator.py"
+cp "$KIT_DIR/payload/ollama_polish.py"      "$APP_DIR/src/transcription/ollama_polish.py"
 
 # ---------- enhancements ----------
 c "Applying enhancements (sounds / right-Cmd toggle / Ctrl+F->local / punctuation / cleanup / indicator) ..."

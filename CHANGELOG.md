@@ -3,6 +3,26 @@
 All notable changes to this kit are documented here.
 This project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.2.0] — 2026-06-01
+
+First feature on the **core-quality** axis (vs the 0.1.x UX/management line).
+
+### Added
+- **Local LLM polish** — an optional post-transcription step that runs the dictation through a
+  **local Ollama model** (default `glm4` / GLM-4-9B) to clean it up before pasting:
+  `POLISH_MODE=light` (faithful — punctuation/typos) or `concise` (trims filler). 100%
+  offline, opt-in (`POLISH_ENABLED`, default off), with a hard timeout that falls back to the raw
+  text so a slow/absent Ollama never blocks dictation. New kit-owned helper
+  `src/transcription/ollama_polish.py` (MIT), copied in by `install.sh`; the patcher wires 4 thin
+  `main.py` hooks (import, flag, instantiate, post-transcription call).
+- **MCP `set_polish`** tool (`mode` / `model` / `enabled`) + `POLISH_*` & `OLLAMA_URL` in the
+  writable allowlist + polish state surfaced in `status()`.
+
+### Notes
+- Polish needs Ollama installed separately and the model pulled (`ollama pull glm4`); it is OFF by
+  default, so existing installs upgrade unchanged.
+- The local-context-vocabulary pipeline (earlier sketched as 0.2.0) is retargeted to **0.3.0**.
+
 ## [0.1.4] — 2026-05-31
 
 ### Added

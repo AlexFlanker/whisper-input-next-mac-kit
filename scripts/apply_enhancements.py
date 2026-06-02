@@ -16,6 +16,10 @@ Enhancements applied:
   * Audio-archive auto-cleanup: delete recordings older than
     AUDIO_ARCHIVE_RETENTION_HOURS (default 24) at startup + every
     AUDIO_ARCHIVE_CLEANUP_INTERVAL_HOURS (default 6); prunes cache.json.
+  * Post-transcription LOCAL LLM polish (optional): if POLISH_ENABLED=true, the result is
+    cleaned up by a local Ollama model (POLISH_MODEL) before pasting — POLISH_MODE=light
+    (faithful) or concise. Fully offline, with a hard timeout fallback to the raw text. The
+    helper (src/transcription/ollama_polish.py) is kit-owned (MIT), copied in by install.sh.
   * Bottom-center "listening indicator" overlay, two styles chosen by INDICATOR_STYLE:
     'ring' (breathing ring -> spinner -> green burst) or 'capsule' (pill that retracts
     to a spinner -> green). SHOW_INDICATOR=false disables it. The UI components
@@ -418,6 +422,54 @@ EDITS = [
             "\n\n@dataclass\nclass TranscriptionJob:",
         desc="indicator: _make_indicator() style factory (ring|capsule)",
     ),
+    # ---- 转录后本地 LLM 精炼（Ollama；UI/逻辑文件由 install.sh 拷入 src/transcription/）----
+    dict(
+        file="main.py",
+        marker="import OllamaPolisher",
+        old="from src.transcription.doubao_streaming import DoubaoStreamingProcessor\n",
+        new="from src.transcription.doubao_streaming import DoubaoStreamingProcessor\n"
+            "from src.transcription.ollama_polish import OllamaPolisher\n",
+        desc="polish: import OllamaPolisher",
+    ),
+    dict(
+        file="main.py",
+        marker="_POLISH_ENABLED",
+        old='_INDICATOR_STYLE = os.getenv("INDICATOR_STYLE", "ring").lower()',
+        new='_INDICATOR_STYLE = os.getenv("INDICATOR_STYLE", "ring").lower()\n'
+            "# 转录后本地 LLM 精炼（Ollama）：POLISH_ENABLED=true 开启；默认关\n"
+            '_POLISH_ENABLED = os.getenv("POLISH_ENABLED", "false").lower() == "true"',
+        desc="polish: POLISH_ENABLED flag",
+    ),
+    dict(
+        file="main.py",
+        marker="self.polisher =",
+        old="        self.listening_indicator = _make_indicator()",
+        new="        self.listening_indicator = _make_indicator()\n"
+            "        self.polisher = OllamaPolisher(\n"
+            '            os.getenv("OLLAMA_URL", "http://localhost:11434"),\n'
+            '            os.getenv("POLISH_MODEL", "glm-4.7-flash"),\n'
+            '            mode=os.getenv("POLISH_MODE", "light"),\n'
+            '            timeout=float(os.getenv("POLISH_TIMEOUT", "20")),\n'
+            "        ) if _POLISH_ENABLED else None",
+        desc="polish: instantiate OllamaPolisher (gated by POLISH_ENABLED)",
+    ),
+    dict(
+        file="main.py",
+        marker="self.polisher.polish",
+        old="            self._handle_transcription_failure(job, str(error))\n"
+            "            return\n"
+            "\n"
+            "        service, model = self._get_job_cache_metadata(job)",
+        new="            self._handle_transcription_failure(job, str(error))\n"
+            "            return\n"
+            "\n"
+            "        # 转录后本地 LLM 精炼（可选；内部已兜底，失败原样返回，绝不卡听写）\n"
+            "        if self.polisher is not None and text:\n"
+            "            text = self.polisher.polish(text)\n"
+            "\n"
+            "        service, model = self._get_job_cache_metadata(job)",
+        desc="polish: run post-transcription polish before cache+type",
+    ),
 ]
 
 
@@ -456,7 +508,8 @@ def main():
 
     # syntax check the python files we touched
     for rel in ("main.py", "src/keyboard/listener.py", "src/transcription/local_whisper.py",
-                "src/audio/archive.py", "src/ui/listening_indicator.py", "src/ui/capsule_indicator.py"):
+                "src/audio/archive.py", "src/ui/listening_indicator.py", "src/ui/capsule_indicator.py",
+                "src/transcription/ollama_polish.py"):
         p = os.path.join(app_dir, rel)
         if os.path.isfile(p):
             try:

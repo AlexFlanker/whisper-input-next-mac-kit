@@ -33,6 +33,10 @@ app, including chat boxes, editors, and IDEs.
   two styles (`INDICATOR_STYLE`): **`ring`** (a breathing ring → spinner → green burst) or
   **`capsule`** (a pill that retracts to a spinner → green on done). Switch it live from Claude
   Desktop via the MCP server; `SHOW_INDICATOR=false` disables it.
+- 🧠 **Local LLM polish** (optional) — after transcription, a local **Ollama** model (default
+  `glm4` / GLM-4-9B) tidies the text: `light` (fix punctuation/typos, faithful) or `concise`
+  (trim filler, much shorter). 100% offline, opt-in, with a hard timeout fallback to the raw
+  text — so a slow/absent Ollama never blocks dictation. Switchable via MCP (`set_polish`).
 - 🤖 **Manage it from Claude Desktop** — a thin [MCP server](mcp/) to check status, read logs, tweak config, and switch models by just *asking* — no UI to build.
 - 🩹 **Bug fix** for upstream's `start.sh` dependency check.
 - ⚙️ **Turn-key setup** — uv venv, dependencies, `whisper-cpp`, model download, `.env`, and
@@ -116,6 +120,20 @@ service, or change them from Claude Desktop via the MCP server):
 | `AUDIO_ARCHIVE_CLEANUP_INTERVAL_HOURS` | `6` | how often the background cleanup runs |
 | `SHOW_INDICATOR` | `true` | bottom-center recording/transcribing overlay; `false` to disable |
 | `INDICATOR_STYLE` | `ring` | `ring` (breathing ring) or `capsule` (retracting pill) |
+| `POLISH_ENABLED` | `false` | local-LLM polish of the transcript via Ollama (needs Ollama + model) |
+| `POLISH_MODEL` / `POLISH_MODE` | `glm4` / `light` | Ollama model tag; `light` (faithful) or `concise` |
+
+### 🧠 Enabling local LLM polish (optional)
+
+Off by default. To turn it on:
+
+1. Install [Ollama](https://ollama.com) (`brew install ollama`) and pull a model:
+   `ollama pull glm4` (GLM-4-9B, ~5.5 GB; or `qwen2.5:3b` for a lighter/faster option).
+2. Set `POLISH_ENABLED=true` in `.env` and restart — or just ask Claude Desktop *"turn on polish,
+   concise mode"* (the MCP `set_polish` tool sets it and restarts for you).
+
+`light` keeps your wording and only fixes punctuation/typos; `concise` trims filler for a much
+shorter result. If Ollama isn't running, dictation just pastes the raw transcript (never blocks).
 
 ## 🛠️ Managing the service
 

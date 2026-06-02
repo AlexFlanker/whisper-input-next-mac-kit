@@ -31,6 +31,7 @@ ALLOWED_KEYS = {
     "AUDIO_ARCHIVE_RETENTION_HOURS", "AUDIO_ARCHIVE_CLEANUP_INTERVAL_HOURS",
     "SOUND_START", "SOUND_STOP", "SOUND_DONE", "SOUND_ERROR", "SOUND_WARNING",
     "SHOW_INDICATOR", "INDICATOR_STYLE",
+    "POLISH_ENABLED", "POLISH_MODEL", "POLISH_MODE", "POLISH_TIMEOUT", "OLLAMA_URL",
     "TRANSCRIPTIONS_BUTTON", "TRANSLATIONS_BUTTON", "TRANSCRIPTION_SERVICE",
     "CONVERT_TO_SIMPLIFIED", "ADD_SYMBOL", "OPTIMIZE_RESULT", "AUTO_RETRY_LIMIT",
 }
@@ -98,6 +99,11 @@ def status() -> dict:
             "show": cfg.get("SHOW_INDICATOR", "true"),
             "style": cfg.get("INDICATOR_STYLE", "ring"),
         },
+        "polish": {
+            "enabled": cfg.get("POLISH_ENABLED", "false"),
+            "model": cfg.get("POLISH_MODEL", "?"),
+            "mode": cfg.get("POLISH_MODE", "light"),
+        },
         "hotkey": "tap Right-Cmd (or "
                   f"{cfg.get('TRANSLATIONS_BUTTON', 'ctrl')}+{cfg.get('TRANSCRIPTIONS_BUTTON', 'f')})",
     }
@@ -154,6 +160,41 @@ def set_indicator_style(style: str, restart_now: bool = True) -> dict:
         applied = {"SHOW_INDICATOR": "true", "INDICATOR_STYLE": s}
     else:
         return {"ok": False, "error": f"unknown style: {style!r}", "valid": ["ring", "capsule", "off"]}
+    result = {"ok": True, "applied": applied}
+    if restart_now:
+        _launchctl("kickstart", "-k", f"gui/{_uid()}/{LABEL}")
+        result["restarted"] = True
+    else:
+        result["note"] = "call restart() to apply"
+    return result
+
+
+@mcp.tool()
+def set_polish(mode: str = "", model: str = "", enabled: str = "", restart_now: bool = True) -> dict:
+    """Configure the post-transcription local-LLM polish (Ollama) and restart to apply.
+
+    mode:    'light' (faithful — only fixes punctuation/typos) | 'concise' (trims filler, more concise)
+    model:   an Ollama tag, e.g. 'glm4' (GLM-4-9B), 'qwen2.5:3b'
+    enabled: 'on' | 'off' to toggle the whole feature
+    Leave any field empty to keep it unchanged. Polish needs Ollama running + the model pulled.
+    """
+    applied: dict = {}
+    e = enabled.strip().lower()
+    if e in ("on", "true", "1", "yes"):
+        _write_env_key("POLISH_ENABLED", "true"); applied["POLISH_ENABLED"] = "true"
+    elif e in ("off", "false", "0", "no"):
+        _write_env_key("POLISH_ENABLED", "false"); applied["POLISH_ENABLED"] = "false"
+    elif e:
+        return {"ok": False, "error": f"enabled must be on/off, got {enabled!r}"}
+    if mode:
+        m = mode.strip().lower()
+        if m not in ("light", "concise"):
+            return {"ok": False, "error": f"unknown mode: {mode!r}", "valid": ["light", "concise"]}
+        _write_env_key("POLISH_MODE", m); applied["POLISH_MODE"] = m
+    if model:
+        _write_env_key("POLISH_MODEL", model.strip()); applied["POLISH_MODEL"] = model.strip()
+    if not applied:
+        return {"ok": False, "error": "nothing to set; provide mode / model / enabled"}
     result = {"ok": True, "applied": applied}
     if restart_now:
         _launchctl("kickstart", "-k", f"gui/{_uid()}/{LABEL}")

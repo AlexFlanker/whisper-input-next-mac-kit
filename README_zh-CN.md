@@ -19,6 +19,7 @@
 - ✍️ **中文标点更好**（本地模式）—— prompt 引导出标点 + 半角转全角「，。！？：；」，均可配置。
 - 🧹 **录音归档自动清理**——超过 `AUDIO_ARCHIVE_RETENTION_HOURS`（默认 24 小时）的旧录音连同缓存条目，会在启动时和定期被删除，不会越堆越多。
 - 🟢 **屏幕听写指示器**——屏幕底部居中、点击穿透，两种风格（`INDICATOR_STYLE`）任选：**`ring`**（呼吸光环 → 旋转弧 → 绿色扩散）或 **`capsule`**（胶囊条，录完收起成旋转弧、成功变绿）。可在 Claude 桌面里用 MCP 实时切换；`SHOW_INDICATOR=false` 关闭。
+- 🧠 **本地 LLM 精炼**（可选）——转录后用本地 **Ollama** 模型（默认 `glm4` / GLM-4-9B）把文字整理一遍：`light`（保真，只修标点错字）或 `concise`（去口语赘述、更简洁）。全程离线、默认关、带超时兜底（Ollama 没开/慢就原样返回，绝不卡听写）。可用 MCP（`set_polish`）切换。
 - 🤖 **在 Claude 桌面里管理它** —— 一个极薄的 [MCP 服务](mcp/)，**直接问**就能查状态、看日志、改配置、换模型——不用做任何 UI。
 - 🩹 修复上游 `start.sh` 的依赖检测 bug。
 - ⚙️ **全自动**——uv 虚拟环境、依赖、`whisper-cpp`、模型下载、`.env`、launchd 代理，全部按**你这台机器**的真实路径配好。
@@ -96,6 +97,18 @@ WIN_MODEL=large-v3 ./install.sh   # 例如用完整 large-v3 模型安装
 | `AUDIO_ARCHIVE_CLEANUP_INTERVAL_HOURS` | `6` | 后台定期清理的间隔 |
 | `SHOW_INDICATOR` | `true` | 底部居中的录音/转录指示器；`false` 关闭 |
 | `INDICATOR_STYLE` | `ring` | `ring`（呼吸光环）或 `capsule`（收起式胶囊条） |
+| `POLISH_ENABLED` | `false` | 转录后本地 LLM 精炼（需 Ollama + 模型） |
+| `POLISH_MODEL` / `POLISH_MODE` | `glm4` / `light` | Ollama 模型 tag；`light`（保真）或 `concise`（更简洁） |
+
+### 🧠 开启本地 LLM 精炼（可选）
+
+默认关。开启方法：
+
+1. 装 [Ollama](https://ollama.com)（`brew install ollama`）并拉模型：
+   `ollama pull glm4`（GLM-4-9B，约 5.5GB；想更轻更快可用 `qwen2.5:3b`）。
+2. 在 `.env` 里设 `POLISH_ENABLED=true` 并重启——或直接在 Claude 桌面说*「开启精炼，用 concise 模式」*（MCP 的 `set_polish` 工具会改好并重启）。
+
+`light` 保留你的用词、只修标点错字；`concise` 去赘述、更简洁。Ollama 没开时直接粘原始转录，绝不卡。
 
 ## 🛠️ 管理服务
 
