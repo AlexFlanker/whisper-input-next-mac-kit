@@ -87,6 +87,8 @@ mkdir -p "$APP_DIR/src/ui"
 cp "$KIT_DIR/payload/listening_indicator.py" "$APP_DIR/src/ui/listening_indicator.py"
 cp "$KIT_DIR/payload/capsule_indicator.py"  "$APP_DIR/src/ui/capsule_indicator.py"
 cp "$KIT_DIR/payload/ollama_polish.py"      "$APP_DIR/src/transcription/ollama_polish.py"
+cp "$KIT_DIR/payload/freeze_watchdog.py"    "$APP_DIR/src/utils/freeze_watchdog.py"
+cp "$KIT_DIR/payload/hold_restart.py"       "$APP_DIR/src/ui/hold_restart.py"
 
 # ---------- enhancements ----------
 c "Applying enhancements (sounds / right-Cmd toggle / Ctrl+F->local / punctuation / cleanup / indicator) ..."

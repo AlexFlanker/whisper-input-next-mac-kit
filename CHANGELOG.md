@@ -3,6 +3,32 @@
 All notable changes to this kit are documented here.
 This project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.2.1] — 2026-06-02
+
+Resilience against occasional freezes.
+
+### Added
+- **Hold-to-restart** — if the service hangs, press & hold the on-screen indicator ~1.8s; a red
+  ring fills and it force-restarts (`os._exit`, relaunched by launchd KeepAlive in ~1s).
+  Snapshots all thread stacks right before exiting. New kit-owned `src/ui/hold_restart.py` (MIT).
+- **Freeze watchdog** — `src/utils/freeze_watchdog.py` (MIT): when stuck in a busy state beyond a
+  threshold (transcription 45s / recording 180s, configurable), dumps all thread stacks to
+  `logs/freeze_diagnostics.log` for diagnosis. Diagnostics-only; never auto-restarts.
+- **whisper-cli subprocess timeout** (`WHISPER_SUBPROCESS_TIMEOUT`, default 90s) — actually kills
+  a hung child instead of leaking it behind the old thread-based 180s wrapper.
+
+### Fixed
+- **The on-screen indicator now receives clicks.** `src/ui/status_bar.py` used
+  `AppHelper.runConsoleEventLoop()`, which pumps the run loop (animations/`callAfter`/display work)
+  but never dispatches `NSApp` mouse events to windows — so the hold-to-restart overlay got no
+  clicks. Switched to `AppHelper.runEventLoop()` (activation policy unchanged). Diagnosed
+  empirically (Prohibited *and* Accessory both failed under the console loop; `runEventLoop` works).
+
+### Notes
+- New env knobs: `WATCHDOG_ENABLED` / `WATCHDOG_PROCESSING_SECONDS` / `WATCHDOG_RECORDING_SECONDS`
+  / `WHISPER_SUBPROCESS_TIMEOUT`. The indicator's center is now click-through-disabled (needed for
+  the hold gesture); the panel is non-activating so it never steals focus.
+
 ## [0.2.0] — 2026-06-01
 
 First feature on the **core-quality** axis (vs the 0.1.x UX/management line).

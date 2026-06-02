@@ -37,6 +37,10 @@ app, including chat boxes, editors, and IDEs.
   `glm4` / GLM-4-9B) tidies the text: `light` (fix punctuation/typos, faithful) or `concise`
   (trim filler, much shorter). 100% offline, opt-in, with a hard timeout fallback to the raw
   text — so a slow/absent Ollama never blocks dictation. Switchable via MCP (`set_polish`).
+- 🆘 **Freeze recovery** — if the service ever hangs, **press & hold the on-screen indicator ~1.8s**
+  to force-restart it (launchd brings it back in ~1s). A background **watchdog** also snapshots all
+  thread stacks to `logs/freeze_diagnostics.log` when something stays stuck too long (diagnostics
+  only — never auto-restarts), and `whisper-cli` gets a hard subprocess timeout.
 - 🤖 **Manage it from Claude Desktop** — a thin [MCP server](mcp/) to check status, read logs, tweak config, and switch models by just *asking* — no UI to build.
 - 🩹 **Bug fix** for upstream's `start.sh` dependency check.
 - ⚙️ **Turn-key setup** — uv venv, dependencies, `whisper-cpp`, model download, `.env`, and
@@ -122,6 +126,8 @@ service, or change them from Claude Desktop via the MCP server):
 | `INDICATOR_STYLE` | `ring` | `ring` (breathing ring) or `capsule` (retracting pill) |
 | `POLISH_ENABLED` | `false` | local-LLM polish of the transcript via Ollama (needs Ollama + model) |
 | `POLISH_MODEL` / `POLISH_MODE` | `glm4` / `light` | Ollama model tag; `light` (faithful) or `concise` |
+| `WATCHDOG_ENABLED` / `WATCHDOG_PROCESSING_SECONDS` / `WATCHDOG_RECORDING_SECONDS` | `true` / `45` / `180` | freeze watchdog → thread-stack dump to `logs/freeze_diagnostics.log` |
+| `WHISPER_SUBPROCESS_TIMEOUT` | `90` | kill a hung `whisper-cli` after N seconds |
 
 ### 🧠 Enabling local LLM polish (optional)
 

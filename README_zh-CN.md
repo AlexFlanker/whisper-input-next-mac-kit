@@ -99,6 +99,8 @@ WIN_MODEL=large-v3 ./install.sh   # 例如用完整 large-v3 模型安装
 | `INDICATOR_STYLE` | `ring` | `ring`（呼吸光环）或 `capsule`（收起式胶囊条） |
 | `POLISH_ENABLED` | `false` | 转录后本地 LLM 精炼（需 Ollama + 模型） |
 | `POLISH_MODEL` / `POLISH_MODE` | `glm4` / `light` | Ollama 模型 tag；`light`（保真）或 `concise`（更简洁） |
+| `WATCHDOG_ENABLED` / `WATCHDOG_PROCESSING_SECONDS` / `WATCHDOG_RECORDING_SECONDS` | `true` / `45` / `180` | 卡死看门狗 → 全线程栈写入 `logs/freeze_diagnostics.log` |
+| `WHISPER_SUBPROCESS_TIMEOUT` | `90` | 卡住的 `whisper-cli` 超过 N 秒就杀掉 |
 
 ### 🧠 开启本地 LLM 精炼（可选）
 
@@ -109,6 +111,7 @@ WIN_MODEL=large-v3 ./install.sh   # 例如用完整 large-v3 模型安装
 2. 在 `.env` 里设 `POLISH_ENABLED=true` 并重启——或直接在 Claude 桌面说*「开启精炼，用 concise 模式」*（MCP 的 `set_polish` 工具会改好并重启）。
 
 `light` 保留你的用词、只修标点错字；`concise` 去赘述、更简洁。Ollama 没开时直接粘原始转录，绝不卡。
+- 🆘 **卡死自救**——万一服务卡住，**按住屏幕指示器 ~1.8s** 就强制重启（launchd ~1s 拉回来）。后台**看门狗**还会在某状态卡太久时把全部线程栈写进 `logs/freeze_diagnostics.log`（只诊断、绝不自动重启），`whisper-cli` 子进程也加了硬超时。
 
 ## 🛠️ 管理服务
 

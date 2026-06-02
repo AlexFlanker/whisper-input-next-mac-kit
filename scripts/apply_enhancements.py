@@ -16,6 +16,12 @@ Enhancements applied:
   * Audio-archive auto-cleanup: delete recordings older than
     AUDIO_ARCHIVE_RETENTION_HOURS (default 24) at startup + every
     AUDIO_ARCHIVE_CLEANUP_INTERVAL_HOURS (default 6); prunes cache.json.
+  * Freeze resilience: a FreezeWatchdog dumps all-thread stacks to logs/freeze_diagnostics.log
+    when stuck in a busy state too long; a hold-to-restart overlay (press the indicator ~1.8s)
+    force-restarts the service; the whisper-cli subprocess gets a real timeout. Also switches
+    status_bar to AppHelper.runEventLoop so the overlay actually receives clicks. The two UI/
+    diagnostic files (src/utils/freeze_watchdog.py, src/ui/hold_restart.py) are kit-owned (MIT),
+    copied in by install.sh.
   * Post-transcription LOCAL LLM polish (optional): if POLISH_ENABLED=true, the result is
     cleaned up by a local Ollama model (POLISH_MODEL) before pasting — POLISH_MODE=light
     (faithful) or concise. Fully offline, with a hard timeout fallback to the raw text. The
@@ -470,6 +476,71 @@ EDITS = [
             "        service, model = self._get_job_cache_metadata(job)",
         desc="polish: run post-transcription polish before cache+type",
     ),
+    # ---- 防卡死三件套（看门狗 + whisper 超时 + 事件循环修复；长按重启逻辑在 payload 文件里）----
+    dict(
+        file="main.py",
+        marker="import FreezeWatchdog",
+        old="from src.transcription.ollama_polish import OllamaPolisher\n",
+        new="from src.transcription.ollama_polish import OllamaPolisher\n"
+            "from src.utils.freeze_watchdog import FreezeWatchdog\n",
+        desc="freeze: import FreezeWatchdog",
+    ),
+    dict(
+        file="main.py",
+        marker="_WATCHDOG_ENABLED = os.getenv",
+        old='_POLISH_ENABLED = os.getenv("POLISH_ENABLED", "false").lower() == "true"',
+        new='_POLISH_ENABLED = os.getenv("POLISH_ENABLED", "false").lower() == "true"\n'
+            "# 卡死诊断看门狗：卡在忙碌态超阈值时 dump 全线程栈；WATCHDOG_ENABLED=false 关闭\n"
+            '_WATCHDOG_ENABLED = os.getenv("WATCHDOG_ENABLED", "true").lower() == "true"',
+        desc="freeze: WATCHDOG_ENABLED flag",
+    ),
+    dict(
+        file="main.py",
+        marker="self.watchdog =",
+        old="        ) if _POLISH_ENABLED else None",
+        new="        ) if _POLISH_ENABLED else None\n"
+            "        self.watchdog = FreezeWatchdog(\n"
+            '            os.path.join(os.path.dirname(os.path.abspath(__file__)), "logs", "freeze_diagnostics.log"),\n'
+            '            processing_secs=float(os.getenv("WATCHDOG_PROCESSING_SECONDS", "45")),\n'
+            '            recording_secs=float(os.getenv("WATCHDOG_RECORDING_SECONDS", "180")),\n'
+            "        ) if _WATCHDOG_ENABLED else None\n"
+            "        if self.watchdog is not None:\n"
+            "            self.watchdog.start()",
+        desc="freeze: instantiate + start FreezeWatchdog",
+    ),
+    dict(
+        file="main.py",
+        marker="self.watchdog.note_state",
+        old="        self._update_indicator(prev_state, new_state)",
+        new="        self._update_indicator(prev_state, new_state)\n"
+            "        if self.watchdog is not None:\n"
+            "            self.watchdog.note_state(new_state)",
+        desc="freeze: watchdog note_state hook in _on_state_change",
+    ),
+    dict(
+        file="src/ui/status_bar.py",
+        marker="runEventLoop",
+        old="        AppHelper.callAfter(self._setup)\n"
+            "        AppHelper.runConsoleEventLoop()",
+        new="        AppHelper.callAfter(self._setup)\n"
+            "        # 用 runEventLoop（而非 runConsoleEventLoop）：后者只跑 run loop、不派发 NSApp 的\n"
+            "        # 鼠标事件，导致悬浮窗收不到点击（长按重启失效）。runEventLoop 才会把鼠标事件\n"
+            "        # 投递给窗口；状态栏/动画/callAfter 一切照常。\n"
+            "        AppHelper.runEventLoop()",
+        desc="freeze: status_bar runConsoleEventLoop -> runEventLoop (overlays receive clicks)",
+    ),
+    dict(
+        file="src/transcription/local_whisper.py",
+        marker="WHISPER_SUBPROCESS_TIMEOUT",
+        old="            # 执行命令\n"
+            "            result = subprocess.run(cmd, check=True, capture_output=True, text=True)",
+        new="            # 执行命令（带超时：卡住时真正杀掉子进程并抛 TimeoutExpired，而非无限阻塞）\n"
+            "            result = subprocess.run(\n"
+            "                cmd, check=True, capture_output=True, text=True,\n"
+            '                timeout=float(os.getenv("WHISPER_SUBPROCESS_TIMEOUT", "90")),\n'
+            "            )",
+        desc="freeze: whisper-cli subprocess real timeout (kills hung child)",
+    ),
 ]
 
 
@@ -509,7 +580,8 @@ def main():
     # syntax check the python files we touched
     for rel in ("main.py", "src/keyboard/listener.py", "src/transcription/local_whisper.py",
                 "src/audio/archive.py", "src/ui/listening_indicator.py", "src/ui/capsule_indicator.py",
-                "src/transcription/ollama_polish.py"):
+                "src/transcription/ollama_polish.py", "src/ui/status_bar.py",
+                "src/utils/freeze_watchdog.py", "src/ui/hold_restart.py"):
         p = os.path.join(app_dir, rel)
         if os.path.isfile(p):
             try:

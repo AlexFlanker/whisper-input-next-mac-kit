@@ -28,6 +28,8 @@ from AppKit import (
 from Cocoa import NSColor, NSScreen
 from PyObjCTools import AppHelper
 
+from src.ui.hold_restart import attach_hold_to_restart
+
 try:
     from Quartz import (
         CABasicAnimation,
@@ -298,6 +300,7 @@ class CapsuleIndicator:
         self._spinner = spinner
 
         self._panel = panel
+        attach_hold_to_restart(panel, 160.0, 44.0)  # 长按 ~1.8s 强制重启
 
     def _position_bottom_center(self) -> None:
         if self._panel is None:
