@@ -734,7 +734,8 @@ def main():
                 "src/utils/freeze_watchdog.py", "src/ui/hold_restart.py",
                 "src/transcription/qwen3_asr.py", "src/transcription/local_vocab.py",
                 "src/ui/wave_indicator.py", "src/audio/recorder.py",
-                "src/transcription/transcript_log.py", "src/transcription/inbox_server.py"):
+                "src/transcription/transcript_log.py", "src/transcription/inbox_server.py",
+                "hub_main.py"):
         p = os.path.join(app_dir, rel)
         if os.path.isfile(p):
             try:

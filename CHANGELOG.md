@@ -19,6 +19,14 @@ The Mac becomes the hub for all your voice input (phase 1 of the iPhone app / vo
   `GET /v1/health`. Token auto-generated in `audio_archive/hub/.inbox_token` (chmod 600, git-ignored).
   Long uploads never block live dictation — while one is transcribing, hotkey dictation uses
   whisper.cpp instead of queueing. Set `INBOX_HOST=0.0.0.0` (or a Tailscale IP) to reach it from a phone.
+- **Multi-Mac hub** — run a headless hub on an always-on Mac (e.g. a Mac mini) with
+  `WIN_ROLE=hub ./install.sh`: it starts `hub_main.py` (inbox + Qwen3-ASR + transcript log; no hotkey,
+  indicator or privacy permissions) and listens on the LAN / Tailscale. On your laptop,
+  `scripts/connect_hub.sh <hub-host>` fetches the hub token over ssh, sets `HUB_URL`/`HUB_TOKEN`,
+  copies your `vocabulary.txt` to the hub and restarts. Dictation stays local (offline-capable); new
+  records sync to the hub in the background, queue while it's unreachable and resume where they left
+  off; the hub dedupes by record id. `GET /v1/transcripts` lets the laptop's MCP search every
+  device's history on the hub, falling back to the local log when the hub can't be reached.
 - **MCP**: `transcripts_recent`, `transcripts_search` (all-terms query, `since`/`until` as `today`,
   `yesterday`, `7d`, `12h` or dates, `source` filter) and `inbox_info` (connection details; never
   returns the token). `status()` shows transcript count and inbox address.

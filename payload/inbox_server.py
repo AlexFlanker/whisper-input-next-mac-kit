@@ -4,8 +4,10 @@
 Qwen3-ASR。所有请求都要带 token（Authorization: Bearer <token>，或 X-Inbox-Token 头）。
 
   GET  /v1/health                     → {"ok": true, "engine": ..., "transcripts": <条数>}
-  POST /v1/text   JSON {"text": "...", "source": "iphone", "ts"?, "duration_s"?, "engine"?, "model"?}
-                                      → 设备已在本地转写好，只记日志
+  GET  /v1/transcripts?q=&since=&until=&source=&limit=
+                                      → 检索转写日志（MCP 在客户端机器上远程查中枢用）
+  POST /v1/text   JSON {"text": "...", "source": "iphone", "id"?, "ts"?, "duration_s"?, "engine"?, "model"?}
+                                      → 设备已在本地转写好，只记日志（带 id 的按 id 去重）
   POST /v1/audio?source=pendant       → 请求体是音频文件（WAV / FLAC / MP3 等 libsndfile 能读的格式），
                                         用本机 Qwen3-ASR 转写后记日志，返回 {"text": ...}
 
@@ -25,6 +27,7 @@ import os
 import secrets
 import threading
 import time
+from datetime import datetime
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlparse
 
@@ -103,7 +106,10 @@ def make_handler(processor, token: str, max_bytes: int):
         def do_GET(self):  # noqa: N802
             if not self._authorized():
                 return self._json(401, {"ok": False, "error": "unauthorized"})
-            if urlparse(self.path).path == "/v1/health":
+            url = urlparse(self.path)
+            if url.path == "/v1/transcripts":
+                return self._get_transcripts(parse_qs(url.query))
+            if url.path == "/v1/health":
                 engine = None
                 try:
                     with open(os.path.join(_APP_DIR, "logs", "asr_engine.json"), encoding="utf-8") as f:
@@ -138,13 +144,31 @@ def make_handler(processor, token: str, max_bytes: int):
             if not transcript_log.SOURCE_RE.match(source):
                 return self._json(400, {"ok": False, "error": "source must match [a-z0-9_-]{1,32}"})
             dur = data.get("duration_s")
+            ts = data.get("ts")
+            if ts is not None:
+                try:
+                    datetime.fromisoformat(str(ts))
+                except ValueError:
+                    return self._json(400, {"ok": False, "error": "ts must be ISO 8601"})
             rec = transcript_log.append(
                 text, source=source, model=data.get("model"), engine=data.get("engine"),
-                duration_s=float(dur) if isinstance(dur, (int, float)) else None, ts=data.get("ts"))
+                duration_s=float(dur) if isinstance(dur, (int, float)) else None,
+                mode=str(data.get("mode") or "transcriptions"), ts=ts, rec_id=data.get("id"))
             if rec is None:
                 return self._json(503, {"ok": False, "error": "transcript log disabled or not writable"})
+            if rec.get("duplicate"):
+                return self._json(200, {"ok": True, "id": rec["id"], "duplicate": True})
             logger.info(f"[收件口] 收到 {source} 文字（{len(text)} 字）")
             return self._json(200, {"ok": True, "id": rec["id"]})
+
+        def _get_transcripts(self, query):
+            q = {k: (v[0] if v else "") for k, v in query.items()}
+            try:
+                res = transcript_log.search(q.get("q", ""), q.get("since", ""), q.get("until", ""),
+                                            q.get("source", ""), int(q.get("limit", "50") or 50))
+            except ValueError as exc:
+                return self._json(400, {"ok": False, "error": str(exc)})
+            return self._json(200, res)
 
         def _post_audio(self, query):
             source = (query.get("source") or ["pendant"])[0]
@@ -170,7 +194,8 @@ def make_handler(processor, token: str, max_bytes: int):
 
 
 def start_inbox(processor):
-    """在后台线程启动收件口；关闭或启动失败都只记日志，绝不影响听写。"""
+    """在后台线程启动收件口（以及配置了 HUB_URL 时的中枢同步）；失败都只记日志，绝不影响听写。"""
+    transcript_log.start_forwarder()
     if os.getenv("INBOX_ENABLED", "true").lower() != "true":
         return None
     host = os.getenv("INBOX_HOST", "127.0.0.1").strip() or "127.0.0.1"

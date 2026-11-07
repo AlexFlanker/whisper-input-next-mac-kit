@@ -116,6 +116,23 @@ WIN_MODEL=large-v3 ./install.sh   # 例如用完整 large-v3 模型安装
 `light` 保留你的用词、只修标点错字；`concise` 去赘述、更简洁。Ollama 没开时直接粘原始转录，绝不卡。
 - 🆘 **卡死自救**——万一服务卡住，**按住屏幕指示器 ~1.8s** 就强制重启（launchd ~1s 拉回来）。后台**看门狗**还会在某状态卡太久时把全部线程栈写进 `logs/freeze_diagnostics.log`（只诊断、绝不自动重启），`whisper-cli` 子进程也加了硬超时。
 
+## 🏠 可选：家里放一台中枢（Mac mini）
+
+找一台常开的 Mac 当中枢，汇总所有设备（笔记本、iPhone、录音笔）的听写，让 Claude 一处查全。
+
+```bash
+# 在中枢（如 Mac mini）上：纯服务端，不需要任何隐私权限
+WIN_ROLE=hub ./install.sh
+sudo pmset -a sleep 0 disksleep 0          # 不睡眠；另外打开自动登录（LaunchAgent 需要登录会话）
+# 系统设置 → 通用 → 共享 → 远程登录（方便笔记本自动取 token）
+
+# 在笔记本上
+./scripts/connect_hub.sh mac-mini.local    # 或中枢的 Tailscale 名称，在外面也能同步
+```
+
+笔记本照常本地转写（离线可用），新的听写在后台同步到中枢，出门在外就先排队，回家自动补发；
+Claude 的 `transcripts_search` 会从中枢查。
+
 ## 🛠️ 管理服务
 
 ```bash

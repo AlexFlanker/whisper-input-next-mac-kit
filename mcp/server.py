@@ -40,6 +40,7 @@ ALLOWED_KEYS = {
     "VOCAB_ENABLED", "VOCAB_FILE", "VOCAB_MAX_REPLACEMENTS",
     "TRANSCRIPTS_ENABLED", "TRANSCRIPTS_FILE",
     "INBOX_ENABLED", "INBOX_HOST", "INBOX_PORT", "INBOX_MAX_MB",
+    "HUB_URL", "HUB_SYNC_INTERVAL",  # HUB_TOKEN deliberately not settable here (use scripts/connect_hub.sh)
 }
 INBOX_TOKEN_PATH = APP_DIR / "audio_archive" / "hub" / ".inbox_token"  # git-ignored; the value is never returned by any tool
 
@@ -175,16 +176,73 @@ def _rec_time(rec: dict):
         return None
 
 
+def _hub_query(params: dict) -> dict | None:
+    """If HUB_URL is configured, ask the hub (it has every device's transcripts). None → use the local log."""
+    cfg = _read_env()
+    url, token = cfg.get("HUB_URL", "").strip(), cfg.get("HUB_TOKEN", "").strip()
+    if not url or not token:
+        return None
+    import urllib.parse
+    import urllib.request
+
+    q = urllib.parse.urlencode({k: v for k, v in params.items() if v not in ("", None)})
+    req = urllib.request.Request(f"{url.rstrip('/')}/v1/transcripts?{q}", headers={"Authorization": f"Bearer {token}"})
+    try:
+        with urllib.request.urlopen(req, timeout=6) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+        data["from"] = f"hub {url}"
+        return data
+    except Exception as exc:  # noqa: BLE001
+        return {"_unreachable": f"{url}: {exc}"}
+
+
+def _with_hub(params: dict, local_fn) -> dict:
+    remote = _hub_query(params)
+    if remote is None:
+        out = local_fn()
+        out["from"] = "this Mac"
+        return out
+    if "_unreachable" in remote:
+        out = local_fn()
+        out["from"] = "this Mac (hub unreachable — showing only this Mac's dictations)"
+        out["hub_error"] = remote["_unreachable"]
+        return out
+    return remote
+
+
+def _hub_sync_state() -> dict:
+    cfg = _read_env()
+    if not cfg.get("HUB_URL"):
+        return {"configured": False}
+    out = {"configured": True, "url": cfg["HUB_URL"], "token_set": bool(cfg.get("HUB_TOKEN"))}
+    try:
+        state = json.loads((_transcripts_path().parent / "sync_state.json").read_text(encoding="utf-8"))
+        size = _transcripts_path().stat().st_size
+        out.update(synced_up_to=state.get("updated"), pending_bytes=max(0, size - int(state.get("offset", 0))))
+    except Exception:  # noqa: BLE001
+        out["pending_bytes"] = "unknown (no sync yet)"
+    probe = _hub_query({"limit": 1})
+    out["reachable"] = probe is not None and "_unreachable" not in probe
+    return out
+
+
 @mcp.tool()
 def transcripts_recent(limit: int = 20, source: str = "") -> dict:
     """The most recent dictations / voice notes from the persistent transcript log (newest first).
 
-    source: '' for all, or 'mac' (hotkey dictation on this Mac), 'iphone', 'pendant' (voice recorder), ...
+    source: '' for all, or 'mac' (hotkey dictation on a Mac), 'iphone', 'pendant' (voice recorder), ...
+    With a hub configured (HUB_URL), this covers every device; otherwise just this Mac.
     """
     limit = max(1, min(int(limit), 200))
-    rows = [r for r in _iter_transcripts() if not source or r.get("source") == source]
-    rows = rows[-limit:][::-1]
-    return {"file": str(_transcripts_path()), "count": len(rows), "transcripts": rows}
+
+    def local() -> dict:
+        rows = [r for r in _iter_transcripts() if not source or r.get("source") == source]
+        rows = rows[-limit:][::-1]
+        return {"count": len(rows), "transcripts": rows}
+
+    out = _with_hub({"limit": limit, "source": source}, local)
+    out.setdefault("count", out.get("returned", len(out.get("transcripts", []))))
+    return out
 
 
 @mcp.tool()
@@ -195,6 +253,7 @@ def transcripts_search(query: str = "", since: str = "", until: str = "", source
     since / until: 'today', 'yesterday', '7d', '12h', 'YYYY-MM-DD' or an ISO datetime.
     source: '' for all, or 'mac' / 'iphone' / 'pendant' / ...
     Use this to answer things like "what did I say about X this week" or to collect voice notes to summarize.
+    With a hub configured (HUB_URL), this searches every device; otherwise just this Mac.
     """
     try:
         t0 = _parse_when(since)
@@ -203,23 +262,27 @@ def transcripts_search(query: str = "", since: str = "", until: str = "", source
         return {"ok": False, "error": str(exc)}
     terms = [t.lower() for t in (query or "").split() if t]
     limit = max(1, min(int(limit), 500))
-    hits, total = [], 0
-    for r in _iter_transcripts():
-        if source and r.get("source") != source:
-            continue
-        ts = _rec_time(r)
-        if (t0 or t1) and ts is None:
-            continue
-        if t0 and ts < t0:
-            continue
-        if t1 and ts >= t1:
-            continue
-        text = str(r.get("text", "")).lower()
-        if all(t in text for t in terms):
-            total += 1
-            hits.append(r)
-    hits = hits[-limit:][::-1]
-    return {"ok": True, "matches": total, "returned": len(hits), "transcripts": hits}
+
+    def local() -> dict:
+        hits, total = [], 0
+        for r in _iter_transcripts():
+            if source and r.get("source") != source:
+                continue
+            ts = _rec_time(r)
+            if (t0 or t1) and ts is None:
+                continue
+            if t0 and ts < t0:
+                continue
+            if t1 and ts >= t1:
+                continue
+            text = str(r.get("text", "")).lower()
+            if all(t in text for t in terms):
+                total += 1
+                hits.append(r)
+        hits = hits[-limit:][::-1]
+        return {"ok": True, "matches": total, "returned": len(hits), "transcripts": hits}
+
+    return _with_hub({"q": query, "since": since, "until": until, "source": source, "limit": limit}, local)
 
 
 @mcp.tool()
@@ -286,6 +349,7 @@ def status() -> dict:
                         "enabled": cfg.get("TRANSCRIPTS_ENABLED", "true")},
         "inbox": {"enabled": cfg.get("INBOX_ENABLED", "true"),
                   "listen": f"{cfg.get('INBOX_HOST', '127.0.0.1')}:{cfg.get('INBOX_PORT', '8765')}"},
+        "hub_sync": _hub_sync_state(),
         "transcription_service": cfg.get("TRANSCRIPTION_SERVICE", "?"),
         "sounds": {k: cfg.get(k) for k in ("SOUND_START", "SOUND_STOP", "SOUND_DONE", "SOUND_ERROR")},
         "punctuation_prompt_on": bool(cfg.get("WHISPER_PROMPT")),

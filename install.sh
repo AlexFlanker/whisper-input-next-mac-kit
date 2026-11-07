@@ -20,7 +20,13 @@ MODEL="${WIN_MODEL:-large-v3-turbo}"          # large-v3-turbo | large-v3 | medi
 LABEL="${WIN_LABEL:-com.whisper-input-next.kit}"
 ASR_ENGINE="${WIN_ASR_ENGINE:-qwen3}"          # qwen3 (Qwen3-ASR via MLX, Apple Silicon) | whisper
 QWEN_MODEL="${WIN_QWEN_MODEL:-mlx-community/Qwen3-ASR-1.7B-bf16}"
+ROLE="${WIN_ROLE:-client}"                     # client (dictation app) | hub (headless server, e.g. a Mac mini)
 KIT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+case "$ROLE" in
+  client) ENTRY="main.py";     INBOX_HOST="127.0.0.1" ;;
+  hub)    ENTRY="hub_main.py"; INBOX_HOST="0.0.0.0" ;;
+  *) printf 'WIN_ROLE must be client or hub (got %s)\n' "$ROLE" >&2; exit 1 ;;
+esac
 
 c()    { printf '\033[1;36m[win-kit]\033[0m %s\n' "$*"; }
 warn() { printf '\033[1;33m[win-kit]\033[0m %s\n' "$*"; }
@@ -120,6 +126,7 @@ cp "$KIT_DIR/payload/local_vocab.py"        "$APP_DIR/src/transcription/local_vo
 cp "$KIT_DIR/payload/qwen3_asr.py"          "$APP_DIR/src/transcription/qwen3_asr.py"
 cp "$KIT_DIR/payload/transcript_log.py"     "$APP_DIR/src/transcription/transcript_log.py"
 cp "$KIT_DIR/payload/inbox_server.py"       "$APP_DIR/src/transcription/inbox_server.py"
+cp "$KIT_DIR/payload/hub_main.py"           "$APP_DIR/hub_main.py"
 if [ ! -f "$APP_DIR/vocabulary.txt" ]; then
   cp "$KIT_DIR/templates/vocabulary.example.txt" "$APP_DIR/vocabulary.txt"
 fi
@@ -138,6 +145,7 @@ else
       -e "s#__LOCAL_ASR_ENGINE__#${ASR_ENGINE}#g" \
       -e "s#__QWEN_ASR_MODEL__#${QWEN_MODEL}#g" \
       -e "s#__APP_DIR__#${APP_DIR}#g" \
+      -e "s#__INBOX_HOST__#${INBOX_HOST}#g" \
       "$KIT_DIR/templates/env.local.template" > "$APP_DIR/.env"
 fi
 
@@ -147,6 +155,7 @@ PLIST="$HOME/Library/LaunchAgents/${LABEL}.plist"
 c "Writing LaunchAgent -> $PLIST ..."
 sed -e "s#__LABEL__#${LABEL}#g" \
     -e "s#__VENV_PY__#${VENV_PY}#g" \
+    -e "s#__ENTRY__#${ENTRY}#g" \
     -e "s#__APP_DIR__#${APP_DIR}#g" \
     "$KIT_DIR/templates/launchagent.plist.template" > "$PLIST"
 
@@ -157,6 +166,36 @@ launchctl enable     "gui/${UID_NUM}/${LABEL}"
 launchctl kickstart -k "gui/${UID_NUM}/${LABEL}"
 
 # ---------- done ----------
+if [ "$ROLE" = "hub" ]; then
+  HOSTNAME_LOCAL="$(scutil --get LocalHostName 2>/dev/null || hostname -s).local"
+  TS_IP="$(command -v tailscale >/dev/null 2>&1 && tailscale ip -4 2>/dev/null | head -1 || true)"
+  cat <<HUBBANNER
+
+============================================================
+ ✅ Voice hub installed (headless). Running now, auto-starts at login.
+============================================================
+
+ No Accessibility / Input Monitoring / Microphone permissions needed.
+
+ Keep this Mac available:
+     sudo pmset -a sleep 0 disksleep 0     # never sleep (display can still sleep)
+     System Settings → Users & Groups → Automatically log in as: you
+     (a LaunchAgent only runs while you're logged in)
+
+ Hub address for your other devices:
+     at home (same Wi-Fi):  http://${HOSTNAME_LOCAL}:8765
+$( [ -n "$TS_IP" ] && echo "     anywhere (Tailscale):  http://${TS_IP}:8765" || echo "     anywhere: install Tailscale on this Mac and your devices, then use its 100.x address" )
+ Token: ${APP_DIR}/audio_archive/hub/.inbox_token   (created a few seconds after start)
+
+ On your MacBook (with this kit checked out):
+     ./scripts/connect_hub.sh ${HOSTNAME_LOCAL}
+
+ Logs: tail -f "$APP_DIR/logs/launchd.err.log"
+============================================================
+HUBBANNER
+  exit 0
+fi
+
 cat <<BANNER
 
 ============================================================

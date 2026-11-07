@@ -8,7 +8,7 @@
     <key>ProgramArguments</key>
     <array>
         <string>__VENV_PY__</string>
-        <string>__APP_DIR__/main.py</string>
+        <string>__APP_DIR__/__ENTRY__</string>
     </array>
 
     <key>WorkingDirectory</key>

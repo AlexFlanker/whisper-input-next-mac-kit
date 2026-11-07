@@ -156,6 +156,24 @@ Off by default. To turn it on:
 `light` keeps your wording and only fixes punctuation/typos; `concise` trims filler for a much
 shorter result. If Ollama isn't running, dictation just pastes the raw transcript (never blocks).
 
+## 🏠 Optional: a home hub (Mac mini) for all your devices
+
+Keep an always-on Mac as the hub that collects every dictation — laptop, iPhone, voice recorder —
+so Claude can search all of it.
+
+```bash
+# on the hub (e.g. Mac mini): headless server, no permissions needed
+WIN_ROLE=hub ./install.sh
+sudo pmset -a sleep 0 disksleep 0          # stay awake; also enable auto-login for the LaunchAgent
+# System Settings → General → Sharing → Remote Login (so your laptop can fetch the token)
+
+# on your laptop
+./scripts/connect_hub.sh mac-mini.local    # or the hub's Tailscale name to sync from anywhere
+```
+
+Your laptop keeps transcribing locally (works offline). New dictations sync to the hub in the
+background and queue while you're away; Claude's `transcripts_search` then answers from the hub.
+
 ## 🛠️ Managing the service
 
 ```bash
