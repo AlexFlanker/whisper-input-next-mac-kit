@@ -608,6 +608,39 @@ EDITS = [
             "            self.audio_recorder.level_callback = self.listening_indicator.set_level\n",
         desc="indicator: wire recorder level -> indicator.set_level",
     ),
+    # ---- 防卡死：关闭音频流设超时（macOS 的 Pa_StopStream 偶尔卡死 → 以前整段录音丢失）----
+    dict(
+        file="src/audio/recorder.py",
+        marker="audio-stream-close",
+        old="        try:\n"
+            "            stream.stop()\n"
+            "        except Exception as exc:\n"
+            '            logger.warning(f"停止音频流时出错: {exc}")\n'
+            "\n"
+            "        try:\n"
+            "            stream.close()\n"
+            "        except Exception as exc:\n"
+            '            logger.warning(f"关闭音频流时出错: {exc}")\n',
+        new="        # 关流设超时：macOS 的 Pa_StopStream 偶尔会卡死（多见于麦克风设备切换），以前会把整个\n"
+            "        # 停止流程卡住、录音丢失。现在放到后台线程里关，最多等 2 秒；等不到就放弃这个流，\n"
+            "        # 继续用已经录下的音频去保存和转录（回调在 recording=False 后不再写入数据）。\n"
+            "        def _shutdown():\n"
+            "            try:\n"
+            "                stream.stop()\n"
+            "            except Exception as exc:\n"
+            '                logger.warning(f"停止音频流时出错: {exc}")\n'
+            "            try:\n"
+            "                stream.close()\n"
+            "            except Exception as exc:\n"
+            '                logger.warning(f"关闭音频流时出错: {exc}")\n'
+            "\n"
+            '        closer = threading.Thread(target=_shutdown, name="audio-stream-close", daemon=True)\n'
+            "        closer.start()\n"
+            "        closer.join(2.0)\n"
+            "        if closer.is_alive():\n"
+            '            logger.warning("⚠️ 关闭音频流超时（macOS 音频驱动卡住），已放弃该流，继续转录已录下的音频")\n',
+        desc="freeze: bounded audio-stream close (no more lost recordings on a hung Pa_StopStream)",
+    ),
 ]
 
 

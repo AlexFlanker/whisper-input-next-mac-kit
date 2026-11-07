@@ -3,6 +3,16 @@
 All notable changes to this kit are documented here.
 This project adheres to [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Fixed
+- **No more lost recordings when stopping hangs.** macOS's `Pa_StopStream` occasionally never returns
+  (seen around mic device changes, e.g. an iPhone Continuity microphone). It blocked the whole stop
+  path — nothing was saved or transcribed, and the indicator stayed on "listening" until a forced
+  restart threw the audio away. Closing the stream now runs on a background thread with a 2s cap; if
+  it hangs, the stream is abandoned (with a warning) and the already-captured audio is saved and
+  transcribed as usual. Normal stops are unaffected.
+
 ## [0.3.0] — 2026-11-06
 
 The first release on the **core-quality** axis: Qwen3-ASR becomes the default local engine
