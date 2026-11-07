@@ -3,10 +3,11 @@
 All notable changes to this kit are documented here.
 This project adheres to [Semantic Versioning](https://semver.org/).
 
-## [Unreleased]
+## [0.3.0] — 2026-11-06
 
-Qwen3-ASR becomes the default local engine (whisper.cpp stays as the automatic fallback), plus the
-first slice of the Local Vocabulary feature from `docs/v0.3.0-blueprint.md`.
+The first release on the **core-quality** axis: Qwen3-ASR becomes the default local engine
+(whisper.cpp stays as the automatic fallback), the first slice of the Local Vocabulary feature from
+`docs/v0.3.0-blueprint.md` lands, and a new default `wave` indicator that follows your voice.
 
 ### Added
 - **Qwen3-ASR engine** (`src/transcription/qwen3_asr.py`, MIT) — Qwen3-ASR-1.7B via MLX on Apple
