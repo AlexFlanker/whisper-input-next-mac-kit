@@ -98,7 +98,7 @@ WIN_MODEL=large-v3 ./install.sh   # 例如用完整 large-v3 模型安装
 | `AUDIO_ARCHIVE_RETENTION_HOURS` | `24` | 删除超过此时长的录音；`<0` 关闭 |
 | `AUDIO_ARCHIVE_CLEANUP_INTERVAL_HOURS` | `6` | 后台定期清理的间隔 |
 | `SHOW_INDICATOR` | `true` | 底部居中的录音/转录指示器；`false` 关闭 |
-| `INDICATOR_STYLE` | `ring` | `ring`（呼吸光环）或 `capsule`（收起式胶囊条） |
+| `INDICATOR_STYLE` | `wave` | `wave`（毛玻璃光团 + 随声音起伏的流光波形）、`ring`（呼吸光环）或 `capsule`（收起式胶囊条） |
 | `POLISH_ENABLED` | `false` | 转录后本地 LLM 精炼（需 Ollama + 模型） |
 | `POLISH_MODEL` / `POLISH_MODE` | `glm4` / `light` | Ollama 模型 tag；`light`（保真）或 `concise`（更简洁） |
 | `WATCHDOG_ENABLED` / `WATCHDOG_PROCESSING_SECONDS` / `WATCHDOG_RECORDING_SECONDS` | `true` / `45` / `180` | 卡死看门狗 → 全线程栈写入 `logs/freeze_diagnostics.log` |

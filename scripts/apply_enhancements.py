@@ -26,7 +26,8 @@ Enhancements applied:
     cleaned up by a local Ollama model (POLISH_MODEL) before pasting — POLISH_MODE=light
     (faithful) or concise. Fully offline, with a hard timeout fallback to the raw text. The
     helper (src/transcription/ollama_polish.py) is kit-owned (MIT), copied in by install.sh.
-  * Bottom-center "listening indicator" overlay, two styles chosen by INDICATOR_STYLE:
+  * Bottom-center "listening indicator" overlay, three styles chosen by INDICATOR_STYLE:
+    'wave' (default: frosted-glass blob + waves that follow the live mic level),
     'ring' (breathing ring -> spinner -> green burst) or 'capsule' (pill that retracts
     to a spinner -> green). SHOW_INDICATOR=false disables it. The UI components
     (src/ui/listening_indicator.py, src/ui/capsule_indicator.py) are kit-owned (MIT)
@@ -365,8 +366,8 @@ EDITS = [
         old="_SOUND_FOR_STATE = {",
         new="# 底部居中的听写指示器浮窗（呼吸光环/旋转弧）；SHOW_INDICATOR=false 关闭\n"
             "_SHOW_INDICATOR = os.getenv(\"SHOW_INDICATOR\", \"true\").lower() == \"true\"\n"
-            "# 指示器风格：ring（呼吸光环，默认）| capsule（胶囊条）\n"
-            "_INDICATOR_STYLE = os.getenv(\"INDICATOR_STYLE\", \"ring\").lower()\n"
+            "# 指示器风格：wave（流光波形，默认）| ring（呼吸光环）| capsule（胶囊条）\n"
+            "_INDICATOR_STYLE = os.getenv(\"INDICATOR_STYLE\", \"wave\").lower()\n"
             "_SOUND_FOR_STATE = {",
         desc="indicator: SHOW_INDICATOR + INDICATOR_STYLE flags",
     ),
@@ -421,7 +422,7 @@ EDITS = [
         old="        pass\n\n\n@dataclass\nclass TranscriptionJob:",
         new="        pass\n\n\n"
             "def _make_indicator():\n"
-            '    """根据 SHOW_INDICATOR / INDICATOR_STYLE 选择听写指示器实现（ring|capsule）。"""\n'
+            '    """根据 SHOW_INDICATOR / INDICATOR_STYLE 选择听写指示器实现（wave|ring|capsule）。"""\n'
             "    if not _SHOW_INDICATOR:\n"
             "        return None\n"
             "    try:\n"
@@ -447,8 +448,8 @@ EDITS = [
     dict(
         file="main.py",
         marker="_POLISH_ENABLED",
-        old='_INDICATOR_STYLE = os.getenv("INDICATOR_STYLE", "ring").lower()',
-        new='_INDICATOR_STYLE = os.getenv("INDICATOR_STYLE", "ring").lower()\n'
+        old='_INDICATOR_STYLE = os.getenv("INDICATOR_STYLE", "wave").lower()',
+        new='_INDICATOR_STYLE = os.getenv("INDICATOR_STYLE", "wave").lower()\n'
             "# 转录后本地 LLM 精炼（Ollama）：POLISH_ENABLED=true 开启；默认关\n"
             '_POLISH_ENABLED = os.getenv("POLISH_ENABLED", "false").lower() == "true"',
         desc="polish: POLISH_ENABLED flag",

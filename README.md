@@ -134,7 +134,7 @@ service, or change them from Claude Desktop via the MCP server):
 | `AUDIO_ARCHIVE_RETENTION_HOURS` | `24` | delete recordings older than this; `<0` disables |
 | `AUDIO_ARCHIVE_CLEANUP_INTERVAL_HOURS` | `6` | how often the background cleanup runs |
 | `SHOW_INDICATOR` | `true` | bottom-center recording/transcribing overlay; `false` to disable |
-| `INDICATOR_STYLE` | `ring` | `ring` (breathing ring) or `capsule` (retracting pill) |
+| `INDICATOR_STYLE` | `wave` | `wave` (frosted-glass blob + waves that follow your voice), `ring` (breathing ring) or `capsule` (retracting pill) |
 | `POLISH_ENABLED` | `false` | local-LLM polish of the transcript via Ollama (needs Ollama + model) |
 | `POLISH_MODEL` / `POLISH_MODE` | `glm4` / `light` | Ollama model tag; `light` (faithful) or `concise` |
 | `WATCHDOG_ENABLED` / `WATCHDOG_PROCESSING_SECONDS` / `WATCHDOG_RECORDING_SECONDS` | `true` / `45` / `180` | freeze watchdog → thread-stack dump to `logs/freeze_diagnostics.log` |

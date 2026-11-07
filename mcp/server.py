@@ -149,7 +149,7 @@ def status() -> dict:
         "archive_retention_hours": cfg.get("AUDIO_ARCHIVE_RETENTION_HOURS", "24"),
         "indicator": {
             "show": cfg.get("SHOW_INDICATOR", "true"),
-            "style": cfg.get("INDICATOR_STYLE", "ring"),
+            "style": cfg.get("INDICATOR_STYLE", "wave"),
         },
         "polish": {
             "enabled": cfg.get("POLISH_ENABLED", "false"),
