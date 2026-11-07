@@ -27,6 +27,10 @@ app, including chat boxes, editors, and IDEs.
 - 📖 **Local vocabulary** — `vocabulary.txt`: one of *your* terms per line (fed to Qwen3-ASR as
   hotwords) or `wrong => right` correction rules. Hot-reloaded on save; manage it from Claude
   Desktop with MCP `vocab_add` / `vocab_remove`.
+- 🗂️ **Your voice, searchable from Claude** — every dictation goes into a persistent transcript log
+  (`audio_archive/hub/transcripts.jsonl`, never auto-deleted). Ask Claude Desktop *"what did I say about
+  the deploy this week?"* — MCP `transcripts_search` / `transcripts_recent` answer from it. A small
+  token-protected **inbox** (`127.0.0.1:8765`) lets an iPhone app or a voice recorder add to the same log.
 - 🎙️ **Tap Right-⌘ to start/stop** — single-tap toggle, no awkward chord, no app conflicts.
 - 🔊 **Audio cues** — *Submarine* on start/stop, *Glass* when the text is pasted. Operate by
   ear; you never need to look at a terminal. Each sound is overridable via env

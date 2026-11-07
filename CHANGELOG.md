@@ -5,6 +5,24 @@ This project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+The Mac becomes the hub for all your voice input (phase 1 of the iPhone app / voice-recorder plan).
+
+### Added
+- **Persistent transcript log** (`src/transcription/transcript_log.py`, MIT) — every dictation is
+  appended to `audio_archive/hub/transcripts.jsonl` (`id`, `ts`, `source`, `text`, `engine`, `model`,
+  `duration_s`, `audio`). Unlike the 24h `cache.json`, it is never pruned — it's the raw corpus for
+  voice notes and the blueprint's history-mining. Existing `cache.json` entries are imported once.
+  `TRANSCRIPTS_ENABLED=false` turns it off.
+- **Inbox** (`src/transcription/inbox_server.py`, MIT) — a tiny token-protected HTTP endpoint inside
+  the service (`127.0.0.1:8765` by default): `POST /v1/text` for devices that transcribe on-device
+  (iPhone), `POST /v1/audio?source=pendant` to have this Mac's Qwen3-ASR transcribe an uploaded file,
+  `GET /v1/health`. Token auto-generated in `audio_archive/hub/.inbox_token` (chmod 600, git-ignored).
+  Long uploads never block live dictation — while one is transcribing, hotkey dictation uses
+  whisper.cpp instead of queueing. Set `INBOX_HOST=0.0.0.0` (or a Tailscale IP) to reach it from a phone.
+- **MCP**: `transcripts_recent`, `transcripts_search` (all-terms query, `since`/`until` as `today`,
+  `yesterday`, `7d`, `12h` or dates, `source` filter) and `inbox_info` (connection details; never
+  returns the token). `status()` shows transcript count and inbox address.
+
 ### Fixed
 - **No more lost recordings when stopping hangs.** macOS's `Pa_StopStream` occasionally never returns
   (seen around mic device changes, e.g. an iPhone Continuity microphone). It blocked the whole stop

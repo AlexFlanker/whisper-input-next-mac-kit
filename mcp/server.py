@@ -38,7 +38,10 @@ ALLOWED_KEYS = {
     "CONVERT_TO_SIMPLIFIED", "ADD_SYMBOL", "OPTIMIZE_RESULT", "AUTO_RETRY_LIMIT",
     "LOCAL_ASR_ENGINE", "QWEN_ASR_MODEL", "QWEN_ASR_TIMEOUT",
     "VOCAB_ENABLED", "VOCAB_FILE", "VOCAB_MAX_REPLACEMENTS",
+    "TRANSCRIPTS_ENABLED", "TRANSCRIPTS_FILE",
+    "INBOX_ENABLED", "INBOX_HOST", "INBOX_PORT", "INBOX_MAX_MB",
 }
+INBOX_TOKEN_PATH = APP_DIR / "audio_archive" / "hub" / ".inbox_token"  # git-ignored; the value is never returned by any tool
 
 mcp = FastMCP("whisper-input")
 
@@ -114,6 +117,143 @@ def _vocab_entries() -> tuple[list[str], list[tuple[str, str]]]:
     return terms, rules
 
 
+def _transcripts_path() -> Path:
+    default = APP_DIR / "audio_archive" / "hub" / "transcripts.jsonl"
+    return Path(os.path.expanduser(_read_env().get("TRANSCRIPTS_FILE") or str(default)))
+
+
+def _iter_transcripts():
+    """Yield records from transcripts.jsonl (skips malformed lines)."""
+    path = _transcripts_path()
+    if not path.exists():
+        return
+    with path.open(encoding="utf-8", errors="replace") as f:
+        for line in f:
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                yield json.loads(line)
+            except json.JSONDecodeError:
+                continue
+
+
+def _parse_when(value: str, *, end: bool = False):
+    """'today' | 'yesterday' | '7d' / '12h' | 'YYYY-MM-DD' | ISO datetime -> aware datetime (local tz)."""
+    from datetime import datetime, timedelta
+
+    v = (value or "").strip().lower()
+    if not v:
+        return None
+    now = datetime.now().astimezone()
+    midnight = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    if v == "today":
+        return midnight + timedelta(days=1) if end else midnight
+    if v == "yesterday":
+        return midnight if end else midnight - timedelta(days=1)
+    m = re.fullmatch(r"(\d+)\s*([dh])", v)
+    if m:
+        n = int(m.group(1))
+        return now - (timedelta(days=n) if m.group(2) == "d" else timedelta(hours=n))
+    try:
+        dt = datetime.fromisoformat(value.strip())
+    except ValueError as exc:
+        raise ValueError(f"can't parse time {value!r}; use today / yesterday / 7d / 12h / YYYY-MM-DD") from exc
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=now.tzinfo)
+    if end and len(value.strip()) == 10:  # a bare date as `until` means the end of that day
+        dt += timedelta(days=1)
+    return dt
+
+
+def _rec_time(rec: dict):
+    from datetime import datetime
+
+    try:
+        return datetime.fromisoformat(rec.get("ts", ""))
+    except ValueError:
+        return None
+
+
+@mcp.tool()
+def transcripts_recent(limit: int = 20, source: str = "") -> dict:
+    """The most recent dictations / voice notes from the persistent transcript log (newest first).
+
+    source: '' for all, or 'mac' (hotkey dictation on this Mac), 'iphone', 'pendant' (voice recorder), ...
+    """
+    limit = max(1, min(int(limit), 200))
+    rows = [r for r in _iter_transcripts() if not source or r.get("source") == source]
+    rows = rows[-limit:][::-1]
+    return {"file": str(_transcripts_path()), "count": len(rows), "transcripts": rows}
+
+
+@mcp.tool()
+def transcripts_search(query: str = "", since: str = "", until: str = "", source: str = "", limit: int = 50) -> dict:
+    """Search everything you've dictated or recorded (persistent transcript log), newest first.
+
+    query: words that must all appear (case-insensitive; Chinese works as plain substrings). Empty = any.
+    since / until: 'today', 'yesterday', '7d', '12h', 'YYYY-MM-DD' or an ISO datetime.
+    source: '' for all, or 'mac' / 'iphone' / 'pendant' / ...
+    Use this to answer things like "what did I say about X this week" or to collect voice notes to summarize.
+    """
+    try:
+        t0 = _parse_when(since)
+        t1 = _parse_when(until, end=True)
+    except ValueError as exc:
+        return {"ok": False, "error": str(exc)}
+    terms = [t.lower() for t in (query or "").split() if t]
+    limit = max(1, min(int(limit), 500))
+    hits, total = [], 0
+    for r in _iter_transcripts():
+        if source and r.get("source") != source:
+            continue
+        ts = _rec_time(r)
+        if (t0 or t1) and ts is None:
+            continue
+        if t0 and ts < t0:
+            continue
+        if t1 and ts >= t1:
+            continue
+        text = str(r.get("text", "")).lower()
+        if all(t in text for t in terms):
+            total += 1
+            hits.append(r)
+    hits = hits[-limit:][::-1]
+    return {"ok": True, "matches": total, "returned": len(hits), "transcripts": hits}
+
+
+@mcp.tool()
+def inbox_info() -> dict:
+    """How an iPhone app or voice recorder can send text/audio to this Mac (the inbox endpoint).
+
+    Never returns the token itself — it lives in a file on this Mac (chmod 600).
+    """
+    cfg = _read_env()
+    host = cfg.get("INBOX_HOST", "127.0.0.1") or "127.0.0.1"
+    port = cfg.get("INBOX_PORT", "8765") or "8765"
+    base = f"http://{host if host not in ('0.0.0.0', '::') else '<this-mac-ip>'}:{port}"
+    tok = f"$(cat {INBOX_TOKEN_PATH})"
+    return {
+        "enabled": cfg.get("INBOX_ENABLED", "true"),
+        "listen": f"{host}:{port}",
+        "reachable_from": "this Mac only" if host in ("127.0.0.1", "localhost", "::1") else "your network",
+        "token_file": str(INBOX_TOKEN_PATH),
+        "token_present": INBOX_TOKEN_PATH.exists() or bool(cfg.get("INBOX_TOKEN")),
+        "endpoints": {
+            "health": f"GET {base}/v1/health",
+            "text": f"POST {base}/v1/text  JSON {{\"text\": \"...\", \"source\": \"iphone\"}}",
+            "audio": f"POST {base}/v1/audio?source=pendant  (body = WAV/FLAC/MP3 file)",
+        },
+        "examples": [
+            f"curl -s -H \"Authorization: Bearer {tok}\" {base}/v1/health",
+            f"curl -s -H \"Authorization: Bearer {tok}\" -H 'Content-Type: application/json' "
+            f"-d '{{\"text\":\"hello from my phone\",\"source\":\"iphone\"}}' {base}/v1/text",
+            f"curl -s -H \"Authorization: Bearer {tok}\" --data-binary @note.wav '{base}/v1/audio?source=pendant'",
+        ],
+        "to_open_for_phone": "set INBOX_HOST=0.0.0.0 (LAN) or your Tailscale IP, then restart()",
+    }
+
+
 @mcp.tool()
 def status() -> dict:
     """Is the dictation service running? Returns pid, the active ASR engine/model, and a config summary."""
@@ -142,6 +282,10 @@ def status() -> dict:
         },
         "vocabulary": {"file": str(_vocab_path()), "terms": len(terms), "rules": len(rules),
                        "enabled": cfg.get("VOCAB_ENABLED", "true")},
+        "transcripts": {"file": str(_transcripts_path()), "count": sum(1 for _ in _iter_transcripts()),
+                        "enabled": cfg.get("TRANSCRIPTS_ENABLED", "true")},
+        "inbox": {"enabled": cfg.get("INBOX_ENABLED", "true"),
+                  "listen": f"{cfg.get('INBOX_HOST', '127.0.0.1')}:{cfg.get('INBOX_PORT', '8765')}"},
         "transcription_service": cfg.get("TRANSCRIPTION_SERVICE", "?"),
         "sounds": {k: cfg.get(k) for k in ("SOUND_START", "SOUND_STOP", "SOUND_DONE", "SOUND_ERROR")},
         "punctuation_prompt_on": bool(cfg.get("WHISPER_PROMPT")),

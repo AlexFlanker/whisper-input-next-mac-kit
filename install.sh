@@ -118,6 +118,8 @@ cp "$KIT_DIR/payload/freeze_watchdog.py"    "$APP_DIR/src/utils/freeze_watchdog.
 cp "$KIT_DIR/payload/hold_restart.py"       "$APP_DIR/src/ui/hold_restart.py"
 cp "$KIT_DIR/payload/local_vocab.py"        "$APP_DIR/src/transcription/local_vocab.py"
 cp "$KIT_DIR/payload/qwen3_asr.py"          "$APP_DIR/src/transcription/qwen3_asr.py"
+cp "$KIT_DIR/payload/transcript_log.py"     "$APP_DIR/src/transcription/transcript_log.py"
+cp "$KIT_DIR/payload/inbox_server.py"       "$APP_DIR/src/transcription/inbox_server.py"
 if [ ! -f "$APP_DIR/vocabulary.txt" ]; then
   cp "$KIT_DIR/templates/vocabulary.example.txt" "$APP_DIR/vocabulary.txt"
 fi

@@ -39,6 +39,11 @@ Enhancements applied:
     context, `wrong => right` rules correct either engine's output. Both modules
     (src/transcription/qwen3_asr.py, src/transcription/local_vocab.py) are kit-owned (MIT),
     copied in by install.sh; this patcher only wraps the local processor in main.py.
+  * Mac hub: every dictation is appended to a persistent transcript log
+    (audio_archive/hub/transcripts.jsonl, never pruned by the 24h cleanup), and a small
+    token-protected inbox (HTTP, 127.0.0.1:8765 by default) lets an iPhone app or a voice
+    recorder hand text or audio to this Mac. Modules src/transcription/transcript_log.py and
+    src/transcription/inbox_server.py are kit-owned (MIT), copied in by install.sh.
 
 Targets upstream commit 5edec44bd66ca0a75c75c485d5af2fd201ce8c17. If you pin a different
 commit and an anchor no longer matches, this script tells you which one and stops.
@@ -641,6 +646,51 @@ EDITS = [
             '            logger.warning("⚠️ 关闭音频流超时（macOS 音频驱动卡住），已放弃该流，继续转录已录下的音频")\n',
         desc="freeze: bounded audio-stream close (no more lost recordings on a hung Pa_StopStream)",
     ),
+    # ---- Mac 中枢：持久转写日志 + 收件口（模块由 install.sh 拷入 src/transcription/）----
+    dict(
+        file="src/audio/archive.py",
+        marker='"transcribe", "hub"}',
+        old='            if entry in {"cache.json", "audio", "transcribe"}:\n',
+        new='            # hub/：kit 的持久转写日志与收件口 token，别当成旧版录音挪进 audio/\n'
+            '            if entry in {"cache.json", "audio", "transcribe", "hub"}:\n',
+        desc="hub: keep audio_archive/hub/ out of the legacy-archive migration",
+    ),
+    dict(
+        file="main.py",
+        marker="import start_inbox",
+        old="from src.transcription.qwen3_asr import make_local_processor\n",
+        new="from src.transcription.qwen3_asr import make_local_processor\n"
+            "from src.transcription import transcript_log as _transcript_log\n"
+            "from src.transcription.inbox_server import start_inbox\n",
+        desc="hub: import transcript_log + start_inbox",
+    ),
+    dict(
+        file="main.py",
+        marker="_transcript_log.append",
+        old="        service, model = self._get_job_cache_metadata(job)\n",
+        new="        service, model = self._get_job_cache_metadata(job)\n"
+            "        # 持久转写日志（不随 24h 归档清理删除；供 MCP / Claude 查询）\n"
+            "        _transcript_log.append(\n"
+            '            text, source="mac", model=model, mode=job.mode,\n'
+            "            duration_s=_transcript_log.wav_seconds(job.audio_bytes),\n"
+            "            audio=os.path.basename(job.archive_path) if job.archive_path else None,\n"
+            "        )\n",
+        desc="hub: append every dictation to transcripts.jsonl",
+    ),
+    dict(
+        file="main.py",
+        marker="start_inbox(local_processor)",
+        old="        assistant = VoiceAssistant(openai_processor, local_processor, doubao_processor)\n"
+            "        assistant.run()\n",
+        new="        assistant = VoiceAssistant(openai_processor, local_processor, doubao_processor)\n"
+            "        # 首次启用时把 24h 缓存里已有的记录导入持久转写日志\n"
+            "        _transcript_log.backfill_from_cache(\n"
+            '            os.path.join(os.path.dirname(os.path.abspath(__file__)), "audio_archive", "cache.json"))\n'
+            "        # 收件口：iPhone / 录音笔把文字或音频交给这台 Mac（本机 HTTP + token；INBOX_ENABLED=false 关闭）\n"
+            "        start_inbox(local_processor)\n"
+            "        assistant.run()\n",
+        desc="hub: backfill transcript log + start the inbox server",
+    ),
 ]
 
 
@@ -683,7 +733,8 @@ def main():
                 "src/transcription/ollama_polish.py", "src/ui/status_bar.py",
                 "src/utils/freeze_watchdog.py", "src/ui/hold_restart.py",
                 "src/transcription/qwen3_asr.py", "src/transcription/local_vocab.py",
-                "src/ui/wave_indicator.py", "src/audio/recorder.py"):
+                "src/ui/wave_indicator.py", "src/audio/recorder.py",
+                "src/transcription/transcript_log.py", "src/transcription/inbox_server.py"):
         p = os.path.join(app_dir, rel)
         if os.path.isfile(p):
             try:

@@ -88,6 +88,8 @@ class LocalASRProcessor:
         self._model = None
         self._healthy = False
         self._state = "loading" if engine == "qwen3" else "off"  # loading | ready | failed | off
+        self._bulk_lock = threading.Lock()
+        self._bulk_jobs = 0  # 收件口的长音频正在占用引擎线程的数量（期间实时听写改走 whisper，不排队）
         self._thread: _EngineThread | None = None
         if engine == "qwen3":
             _write_status(engine="qwen3", state="loading", model=self.qwen_model_id, fallback="whisper")
@@ -173,7 +175,9 @@ class LocalASRProcessor:
         with contextlib.suppress(Exception):
             audio_buffer.close()
 
-        if self.engine == "qwen3" and mode == "transcriptions":
+        if self.engine == "qwen3" and mode == "transcriptions" and self._bulk_jobs > 0:
+            logger.info("[Qwen3-ASR] 正在转写收件口的长音频，本次听写先用 whisper.cpp（不排队等待）")
+        elif self.engine == "qwen3" and mode == "transcriptions":
             if self._healthy and self._thread is not None:
                 t0 = time.time()
                 logger.info("正在使用本地 Qwen3-ASR 处理音频...")
@@ -196,6 +200,38 @@ class LocalASRProcessor:
                 logger.info("[Qwen3-ASR] 不可用，本次使用 whisper.cpp（原因见 logs/asr_engine.json）")
 
         return self._via_whisper(raw, mode, prompt, archive_path)
+
+    def transcribe_bulk(self, raw: bytes):
+        """收件口用：转写一段（可能很长的）音频，返回 (text, engine, model, duration_s)。
+
+        超时上限按时长放宽（不会把引擎标记为不健康）；引擎忙这段时间里，实时听写会直接走 whisper。
+        """
+        import soundfile as sf
+
+        try:
+            dur = float(sf.info(io.BytesIO(raw)).duration)
+        except Exception as exc:  # noqa: BLE001
+            raise ValueError(f"无法读取音频（支持 WAV / FLAC / MP3 等）：{exc}") from exc
+        if self.engine == "qwen3" and self._healthy and self._thread is not None:
+            with self._bulk_lock:
+                self._bulk_jobs += 1
+            fut = self._thread.submit(self._qwen_transcribe, raw)
+
+            def _done(_f):
+                with self._bulk_lock:
+                    self._bulk_jobs -= 1
+
+            fut.add_done_callback(_done)  # 真正跑完才释放（超时后引擎线程可能还在算）
+            timeout = max(self.qwen_timeout, 30.0 + dur * 0.5)
+            try:
+                text = fut.result(timeout=timeout)
+            except FutureTimeout as exc:
+                raise TimeoutError(f"Qwen3-ASR 超过 {timeout:.0f}s 仍未完成") from exc
+            return self._finish(text), "qwen3", self.qwen_model_id, round(dur, 2)
+        text, err = self._via_whisper(raw, "transcriptions", "", None)
+        if err:
+            raise RuntimeError(err)
+        return text or "", "whisper", os.path.basename(self.whisper_model_path), round(dur, 2)
 
     def _via_whisper(self, raw: bytes, mode: str, prompt: str, archive_path):
         self.model_path = self.whisper_model_path

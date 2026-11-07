@@ -14,6 +14,7 @@
 
 - 🎯 **Qwen3-ASR 本地引擎（默认，Apple Silicon）**——比 whisper large-v3 更准更快：在 15 句真实口语（中文 / 英文 / 中英混说 / 专有名词）上，错误从 19 处降到 11 处，中位耗时 2.6s → 0.8s；没听到人声时不会像 whisper 那样编一句话出来。模型常驻内存（约 5 GB），后台加载完成前 / 出错时自动用 whisper.cpp 兜底。`LOCAL_ASR_ENGINE=whisper` 可切回，也可在 Claude 桌面里用 MCP（`set_asr_engine`）切换。
 - 📖 **本地词库**——`vocabulary.txt` 一行一个你的专有名词（作为 Qwen3-ASR 热词），或写 `错 => 对` 的纠错规则；保存即生效，也可以直接让 Claude 用 MCP（`vocab_add` / `vocab_remove`）帮你改。
+- 🗂️ **说过的话，Claude 都能查**——每条听写都存进持久转写日志（`audio_archive/hub/transcripts.jsonl`，不会被自动清理）。直接问 Claude 桌面「我这周关于部署说过什么？」，MCP（`transcripts_search` / `transcripts_recent`）就能从里面找。另有一个带 token 的**收件口**（`127.0.0.1:8765`），iPhone App 或录音笔可以把内容汇到同一份日志。
 - 🎙️ **轻点右 ⌘ 开始/停止**——单键切换，不用别扭的组合键，不和 App 冲突。
 - 🔊 **声音提示**——开始/停止是 *Submarine*（声纳），文字粘好是 *Glass*（叮咚）。凭耳朵操作，全程不用盯屏幕。每个提示音都可用环境变量改（`SOUND_START`/`SOUND_STOP`/`SOUND_DONE`/`SOUND_ERROR`/`SOUND_WARNING`）。
 - 🧠 **Ctrl+F 也走本地** whisper.cpp（上游只把本地绑在 Ctrl+I）。
