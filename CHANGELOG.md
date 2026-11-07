@@ -23,6 +23,14 @@ first slice of the Local Vocabulary feature from `docs/v0.3.0-blueprint.md`.
 - **MCP**: `set_asr_engine` (qwen3 | whisper), `vocab_list` / `vocab_add` / `vocab_remove`;
   `status()` now reports the engine actually in use and vocabulary counts.
 - `tools/asr_ab` in the app checkout was used for the A/B (not shipped by the kit).
+- **`wave` indicator style** (`src/ui/wave_indicator.py`, MIT) — three translucent sine waves
+  (teal / lavender / coral) whose amplitude follows your **live mic level** (fast attack, slow
+  release; a calm breathing line when silent), on native frosted glass (`NSVisualEffectView`, blurs
+  what's behind) with **no fixed outline**: the mask is redrawn every frame as an organic blob whose
+  top and bottom edges ripple independently with your voice and fade out over a 12px feather.
+  Narrower flowing shimmer while transcribing; green check on done. The recorder now reports a per-chunk RMS through an
+  optional `level_callback` (exception-safe). `INDICATOR_STYLE=wave`, or MCP `set_indicator_style('wave')`.
+- Silenced spurious numpy/Accelerate `matmul` RuntimeWarnings during Qwen3-ASR inference.
 
 ### Fixed
 - **Polish no longer translates English into Chinese** — both polish prompts now require keeping the

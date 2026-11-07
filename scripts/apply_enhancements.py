@@ -565,6 +565,48 @@ EDITS = [
             "            local_processor = make_local_processor(LocalWhisperProcessor())\n",
         desc="asr: wrap the local processor (Qwen3-ASR first, whisper.cpp fallback)",
     ),
+    # ---- 流光波形指示器（INDICATOR_STYLE=wave；UI 文件由 install.sh 拷入 src/ui/）+ 实时音量 ----
+    dict(
+        file="main.py",
+        marker="import WaveIndicator",
+        old='        if _INDICATOR_STYLE == "capsule":\n',
+        new='        if _INDICATOR_STYLE == "wave":\n'
+            "            from src.ui.wave_indicator import WaveIndicator\n"
+            "            return WaveIndicator()\n"
+            '        if _INDICATOR_STYLE == "capsule":\n',
+        desc="indicator: 'wave' style in _make_indicator()",
+    ),
+    dict(
+        file="src/audio/recorder.py",
+        marker="level_callback",
+        old="        chunk = indata.copy()\n"
+            "        self._recorded_chunks.append(chunk)\n",
+        new="        chunk = indata.copy()\n"
+            "        self._recorded_chunks.append(chunk)\n"
+            "        # 实时音量 → 指示器（只算一个 RMS，异常一律忽略，绝不影响录音）\n"
+            '        level_cb = getattr(self, "level_callback", None)\n'
+            "        if level_cb is not None:\n"
+            "            try:\n"
+            "                x = chunk.astype(np.float32)\n"
+            "                if chunk.dtype.kind in 'iu':\n"
+            "                    x /= float(np.iinfo(chunk.dtype).max)\n"
+            "                level_cb(float(np.sqrt(np.mean(x * x))))\n"
+            "            except Exception:\n"
+            "                pass\n",
+        desc="recorder: per-chunk RMS -> level_callback (live mic level)",
+    ),
+    dict(
+        file="main.py",
+        marker="audio_recorder.level_callback",
+        old="        if self.watchdog is not None:\n"
+            "            self.watchdog.start()\n",
+        new="        if self.watchdog is not None:\n"
+            "            self.watchdog.start()\n"
+            "        # 实时音量喂给指示器（目前只有 wave 风格用到 set_level）\n"
+            '        if self.listening_indicator is not None and hasattr(self.listening_indicator, "set_level"):\n'
+            "            self.audio_recorder.level_callback = self.listening_indicator.set_level\n",
+        desc="indicator: wire recorder level -> indicator.set_level",
+    ),
 ]
 
 
@@ -606,7 +648,8 @@ def main():
                 "src/audio/archive.py", "src/ui/listening_indicator.py", "src/ui/capsule_indicator.py",
                 "src/transcription/ollama_polish.py", "src/ui/status_bar.py",
                 "src/utils/freeze_watchdog.py", "src/ui/hold_restart.py",
-                "src/transcription/qwen3_asr.py", "src/transcription/local_vocab.py"):
+                "src/transcription/qwen3_asr.py", "src/transcription/local_vocab.py",
+                "src/ui/wave_indicator.py", "src/audio/recorder.py"):
         p = os.path.join(app_dir, rel)
         if os.path.isfile(p):
             try:

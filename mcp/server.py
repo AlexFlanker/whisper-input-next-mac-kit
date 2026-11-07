@@ -198,20 +198,23 @@ def set_indicator_style(style: str, restart_now: bool = True) -> dict:
     """Switch the on-screen listening indicator and (by default) restart to apply it.
 
     style:
+      'wave'    — three translucent sine waves that follow your live voice level (bottom-center pill)
       'ring'    — transparent glowing breathing ring (bottom-center)
       'capsule' — a pill that retracts to a spinner, green on done
       'off'     — hide the indicator entirely
     """
     s = (style or "").strip().lower()
+    if s in ("waveform", "流光", "流光波形"):
+        s = "wave"
     if s in ("off", "none", "false", "hidden", "hide"):
         _write_env_key("SHOW_INDICATOR", "false")
         applied = {"SHOW_INDICATOR": "false"}
-    elif s in ("ring", "capsule"):
+    elif s in ("wave", "ring", "capsule"):
         _write_env_key("SHOW_INDICATOR", "true")
         _write_env_key("INDICATOR_STYLE", s)
         applied = {"SHOW_INDICATOR": "true", "INDICATOR_STYLE": s}
     else:
-        return {"ok": False, "error": f"unknown style: {style!r}", "valid": ["ring", "capsule", "off"]}
+        return {"ok": False, "error": f"unknown style: {style!r}", "valid": ["wave", "ring", "capsule", "off"]}
     result = {"ok": True, "applied": applied}
     if restart_now:
         _launchctl("kickstart", "-k", f"gui/{_uid()}/{LABEL}")

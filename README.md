@@ -38,7 +38,8 @@ app, including chat boxes, editors, and IDEs.
 - 🧹 **Audio-archive auto-cleanup** — old recordings and their cache entries are deleted after
   `AUDIO_ARCHIVE_RETENTION_HOURS` (default 24h), at startup and periodically. Nothing piles up.
 - 🟢 **On-screen listening indicator** — a bottom-center, click-through overlay in your choice of
-  two styles (`INDICATOR_STYLE`): **`ring`** (a breathing ring → spinner → green burst) or
+  three styles (`INDICATOR_STYLE`): **`wave`** (three flowing sine waves that follow your live voice
+  level → shimmer while transcribing → green check), **`ring`** (a breathing ring → spinner → green burst) or
   **`capsule`** (a pill that retracts to a spinner → green on done). Switch it live from Claude
   Desktop via the MCP server; `SHOW_INDICATOR=false` disables it.
 - 🧠 **Local LLM polish** (optional) — after transcription, a local **Ollama** model (default

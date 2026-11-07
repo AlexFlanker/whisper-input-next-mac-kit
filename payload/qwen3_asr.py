@@ -130,8 +130,11 @@ class LocalASRProcessor:
             import soxr  # noqa: F401
             from qwen3_asr_mlx import Qwen3ASR
 
+            import numpy as np
+
             model = Qwen3ASR.from_pretrained(self._resolve_model_path())
-            model.warm_up()
+            with np.errstate(all="ignore"):
+                model.warm_up()
             self._model, self._healthy, self._state = model, True, "ready"
             secs = time.time() - t0
             logger.info(f"[Qwen3-ASR] 已就绪：{self.qwen_model_id}（加载+预热 {secs:.1f}s），之后转录都走 Qwen3-ASR")
@@ -158,7 +161,9 @@ class LocalASRProcessor:
         if sr != _TARGET_SR:  # 高质量重采样（库自带的是无抗混叠的线性插值）
             audio = soxr.resample(audio, sr, _TARGET_SR)
         context = self.vocab.context() if self.vocab is not None else None
-        result = self._model.transcribe(np.ascontiguousarray(audio, dtype=np.float32), context=context)
+        # macOS Accelerate 的 matmul 会误报浮点警告（divide/overflow/invalid），结果是对的，静音之
+        with np.errstate(all="ignore"):
+            result = self._model.transcribe(np.ascontiguousarray(audio, dtype=np.float32), context=context)
         return result.text.strip()
 
     # ---------------- 对外接口（与 LocalWhisperProcessor 相同） ----------------
