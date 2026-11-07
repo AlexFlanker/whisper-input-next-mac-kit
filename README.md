@@ -19,6 +19,14 @@ app, including chat boxes, editors, and IDEs.
 
 ## ✨ What this kit adds on top of upstream
 
+- 🎯 **Qwen3-ASR local engine (default on Apple Silicon)** — more accurate and faster than whisper
+  large-v3: on 15 real utterances (Chinese / English / code-switching / proper nouns) errors dropped
+  19 → 11 and median latency 2.6s → 0.8s, and it doesn't hallucinate a sentence from non-speech.
+  Stays resident (~5 GB RAM); whisper.cpp takes over automatically while it loads or if it fails.
+  `LOCAL_ASR_ENGINE=whisper` (or MCP `set_asr_engine`) switches back.
+- 📖 **Local vocabulary** — `vocabulary.txt`: one of *your* terms per line (fed to Qwen3-ASR as
+  hotwords) or `wrong => right` correction rules. Hot-reloaded on save; manage it from Claude
+  Desktop with MCP `vocab_add` / `vocab_remove`.
 - 🎙️ **Tap Right-⌘ to start/stop** — single-tap toggle, no awkward chord, no app conflicts.
 - 🔊 **Audio cues** — *Submarine* on start/stop, *Glass* when the text is pasted. Operate by
   ear; you never need to look at a terminal. Each sound is overridable via env
@@ -49,7 +57,9 @@ app, including chat boxes, editors, and IDEs.
 ## ✅ Requirements
 
 - **macOS** (Apple Silicon recommended), with **[Homebrew](https://brew.sh)** installed.
-- ~2 GB free disk for the default model (`large-v3-turbo`); ~3 GB for `large-v3`.
+- ~2 GB free disk for the default model (`large-v3-turbo`); ~3 GB for `large-v3`. Qwen3-ASR adds
+  ~4 GB disk and ~5 GB RAM while running (Apple Silicon only; `WIN_ASR_ENGINE=whisper ./install.sh`
+  skips it).
 - `git` (`xcode-select --install`). Everything else (`uv`, `ffmpeg`, `whisper-cpp`) is
   installed for you.
 

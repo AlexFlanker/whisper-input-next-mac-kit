@@ -31,6 +31,13 @@ Enhancements applied:
     to a spinner -> green). SHOW_INDICATOR=false disables it. The UI components
     (src/ui/listening_indicator.py, src/ui/capsule_indicator.py) are kit-owned (MIT)
     and copied in by install.sh; this patcher only wires the main.py hooks + factory.
+  * Local Qwen3-ASR engine (MLX, Apple Silicon): LOCAL_ASR_ENGINE=qwen3 (default) loads
+    Qwen3-ASR in the background and keeps it resident; whisper.cpp is the automatic fallback
+    (not ready yet / deps missing / error / timeout). LOCAL_ASR_ENGINE=whisper keeps the old
+    behaviour. Plus a local vocabulary file (vocabulary.txt): terms are injected as Qwen3-ASR
+    context, `wrong => right` rules correct either engine's output. Both modules
+    (src/transcription/qwen3_asr.py, src/transcription/local_vocab.py) are kit-owned (MIT),
+    copied in by install.sh; this patcher only wraps the local processor in main.py.
 
 Targets upstream commit 5edec44bd66ca0a75c75c485d5af2fd201ce8c17. If you pin a different
 commit and an anchor no longer matches, this script tells you which one and stops.
@@ -541,6 +548,23 @@ EDITS = [
             "            )",
         desc="freeze: whisper-cli subprocess real timeout (kills hung child)",
     ),
+    # ---- 本地 Qwen3-ASR 引擎 + 本地词库（引擎/词库文件由 install.sh 拷入 src/transcription/）----
+    dict(
+        file="main.py",
+        marker="import make_local_processor",
+        old="from src.transcription.local_whisper import LocalWhisperProcessor\n",
+        new="from src.transcription.local_whisper import LocalWhisperProcessor\n"
+            "from src.transcription.qwen3_asr import make_local_processor\n",
+        desc="asr: import make_local_processor",
+    ),
+    dict(
+        file="main.py",
+        marker="make_local_processor(LocalWhisperProcessor())",
+        old="            local_processor = LocalWhisperProcessor()\n",
+        new="            # 本地引擎：LOCAL_ASR_ENGINE=qwen3（默认，whisper.cpp 兜底）| whisper\n"
+            "            local_processor = make_local_processor(LocalWhisperProcessor())\n",
+        desc="asr: wrap the local processor (Qwen3-ASR first, whisper.cpp fallback)",
+    ),
 ]
 
 
@@ -581,7 +605,8 @@ def main():
     for rel in ("main.py", "src/keyboard/listener.py", "src/transcription/local_whisper.py",
                 "src/audio/archive.py", "src/ui/listening_indicator.py", "src/ui/capsule_indicator.py",
                 "src/transcription/ollama_polish.py", "src/ui/status_bar.py",
-                "src/utils/freeze_watchdog.py", "src/ui/hold_restart.py"):
+                "src/utils/freeze_watchdog.py", "src/ui/hold_restart.py",
+                "src/transcription/qwen3_asr.py", "src/transcription/local_vocab.py"):
         p = os.path.join(app_dir, rel)
         if os.path.isfile(p):
             try:

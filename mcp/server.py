@@ -24,6 +24,8 @@ ENV_PATH = APP_DIR / ".env"
 LOG_PATH = APP_DIR / "logs" / "launchd.err.log"
 CACHE_PATH = APP_DIR / "audio_archive" / "cache.json"
 MODELS_DIR = APP_DIR / "models"
+ENGINE_STATUS_PATH = APP_DIR / "logs" / "asr_engine.json"  # written by src/transcription/qwen3_asr.py
+ASR_ENGINES = ("qwen3", "whisper")
 
 # Only these .env keys may be written via set_config (safety allowlist).
 ALLOWED_KEYS = {
@@ -34,6 +36,8 @@ ALLOWED_KEYS = {
     "POLISH_ENABLED", "POLISH_MODEL", "POLISH_MODE", "POLISH_TIMEOUT", "OLLAMA_URL",
     "TRANSCRIPTIONS_BUTTON", "TRANSLATIONS_BUTTON", "TRANSCRIPTION_SERVICE",
     "CONVERT_TO_SIMPLIFIED", "ADD_SYMBOL", "OPTIMIZE_RESULT", "AUTO_RETRY_LIMIT",
+    "LOCAL_ASR_ENGINE", "QWEN_ASR_MODEL", "QWEN_ASR_TIMEOUT",
+    "VOCAB_ENABLED", "VOCAB_FILE", "VOCAB_MAX_REPLACEMENTS",
 }
 
 mcp = FastMCP("whisper-input")
@@ -78,18 +82,66 @@ def _write_env_key(key: str, value: str) -> None:
     ENV_PATH.write_text("\n".join(out) + "\n", encoding="utf-8")
 
 
+def _engine_state() -> dict:
+    """Live engine state as reported by the running service (logs/asr_engine.json)."""
+    try:
+        return json.loads(ENGINE_STATUS_PATH.read_text(encoding="utf-8"))
+    except Exception:  # noqa: BLE001
+        return {}
+
+
+def _vocab_path() -> Path:
+    return Path(os.path.expanduser(_read_env().get("VOCAB_FILE") or str(APP_DIR / "vocabulary.txt")))
+
+
+def _vocab_entries() -> tuple[list[str], list[tuple[str, str]]]:
+    """Parse vocabulary.txt exactly like src/transcription/local_vocab.py does."""
+    terms: list[str] = []
+    rules: list[tuple[str, str]] = []
+    path = _vocab_path()
+    if not path.exists():
+        return terms, rules
+    for raw in path.read_text(encoding="utf-8").splitlines():
+        line = raw.split(" #", 1)[0].strip()
+        if not line or line.startswith("#"):
+            continue
+        if "=>" in line:
+            wrong, right = (s.strip() for s in line.split("=>", 1))
+            if len(wrong) >= 2 and right and wrong != right:
+                rules.append((wrong, right))
+        elif line not in terms:
+            terms.append(line)
+    return terms, rules
+
+
 @mcp.tool()
 def status() -> dict:
-    """Is the dictation service running? Returns pid, current model, and a config summary."""
+    """Is the dictation service running? Returns pid, the active ASR engine/model, and a config summary."""
     info = _launchctl("print", f"gui/{_uid()}/{LABEL}")
     pid_match = re.search(r"pid = (\d+)", info)
     cfg = _read_env()
+    engine = cfg.get("LOCAL_ASR_ENGINE", "qwen3")
+    live = _engine_state()
+    whisper_model = os.path.basename(cfg.get("WHISPER_MODEL_PATH", "?"))
+    qwen_ready = live.get("engine") == "qwen3" and live.get("state") == "ready"
+    terms, rules = _vocab_entries()
     return {
         "running": "state = running" in info,
         "pid": int(pid_match.group(1)) if pid_match else None,
         "label": LABEL,
         "app_dir": str(APP_DIR),
-        "model": os.path.basename(cfg.get("WHISPER_MODEL_PATH", "?")),
+        "model": live.get("model", "?") if qwen_ready else whisper_model,
+        "asr_engine": {
+            "configured": engine,
+            "state": live.get("state", "unknown"),  # loading | downloading | ready | failed
+            "in_use": "qwen3" if qwen_ready else "whisper",
+            "qwen_model": cfg.get("QWEN_ASR_MODEL", "mlx-community/Qwen3-ASR-1.7B-bf16"),
+            "whisper_model": whisper_model,
+            **({"error": live["error"]} if live.get("error") else {}),
+            **({"load_seconds": live["load_seconds"]} if live.get("load_seconds") else {}),
+        },
+        "vocabulary": {"file": str(_vocab_path()), "terms": len(terms), "rules": len(rules),
+                       "enabled": cfg.get("VOCAB_ENABLED", "true")},
         "transcription_service": cfg.get("TRANSCRIPTION_SERVICE", "?"),
         "sounds": {k: cfg.get(k) for k in ("SOUND_START", "SOUND_STOP", "SOUND_DONE", "SOUND_ERROR")},
         "punctuation_prompt_on": bool(cfg.get("WHISPER_PROMPT")),
@@ -202,6 +254,99 @@ def set_polish(mode: str = "", model: str = "", enabled: str = "", restart_now: 
     else:
         result["note"] = "call restart() to apply"
     return result
+
+
+@mcp.tool()
+def set_asr_engine(engine: str, restart_now: bool = True) -> dict:
+    """Switch the local speech-recognition engine and (by default) restart to apply it.
+
+    engine:
+      'qwen3'   — Qwen3-ASR via MLX (Apple Silicon). More accurate on Chinese/English code-switching
+                  and your own terms, ~3x faster; stays resident (~5 GB RAM). whisper.cpp is the
+                  automatic fallback while it loads or if it fails.
+      'whisper' — whisper.cpp only (the original behaviour; no resident model).
+    """
+    e = (engine or "").strip().lower()
+    if e in ("qwen", "qwen3-asr"):
+        e = "qwen3"
+    if e not in ASR_ENGINES:
+        return {"ok": False, "error": f"unknown engine: {engine!r}", "valid": list(ASR_ENGINES)}
+    _write_env_key("LOCAL_ASR_ENGINE", e)
+    result = {"ok": True, "applied": {"LOCAL_ASR_ENGINE": e}}
+    if restart_now:
+        _launchctl("kickstart", "-k", f"gui/{_uid()}/{LABEL}")
+        result["restarted"] = True
+        if e == "qwen3":
+            result["note"] = "Qwen3-ASR loads in the background (seconds when cached); whisper.cpp covers until then. Check status()."
+    else:
+        result["note"] = "call restart() to apply"
+    return result
+
+
+@mcp.tool()
+def vocab_list() -> dict:
+    """List the local vocabulary: terms (hotwords fed to Qwen3-ASR) and `wrong => right` correction rules."""
+    terms, rules = _vocab_entries()
+    return {
+        "file": str(_vocab_path()),
+        "terms": terms,
+        "rules": [{"wrong": w, "right": r} for w, r in rules],
+        "note": "edits take effect on the next dictation (hot-reloaded, no restart needed)",
+    }
+
+
+@mcp.tool()
+def vocab_add(entry: str) -> dict:
+    """Add a term (e.g. 'Kubernetes') or a correction rule (e.g. 'Cloud => Claude') to vocabulary.txt.
+
+    Terms are hotwords for Qwen3-ASR. Rules rewrite the transcript for either engine: English matches
+    whole words case-insensitively, Chinese matches literally; the left side needs >= 2 characters.
+    Rules apply everywhere they match, so only add one when the left side is (almost) always a mishearing.
+    """
+    line = (entry or "").strip()
+    if not line or line.startswith("#") or "\n" in line:
+        return {"ok": False, "error": "give one term, or one rule like 'wrong => right'"}
+    terms, rules = _vocab_entries()
+    if "=>" in line:
+        wrong, right = (s.strip() for s in line.split("=>", 1))
+        if len(wrong) < 2 or not right or wrong == right:
+            return {"ok": False, "error": "rule needs a left side of >= 2 characters and a different right side"}
+        if any(w.lower() == wrong.lower() for w, _ in rules):
+            return {"ok": False, "error": f"a rule for {wrong!r} already exists; vocab_remove it first"}
+        line = f"{wrong} => {right}"
+    elif line in terms:
+        return {"ok": True, "note": "already present", "entry": line}
+    path = _vocab_path()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    existing = path.read_text(encoding="utf-8") if path.exists() else ""
+    sep = "" if not existing or existing.endswith("\n") else "\n"
+    path.write_text(existing + sep + line + "\n", encoding="utf-8")
+    return {"ok": True, "added": line, "file": str(path), "note": "active from the next dictation"}
+
+
+@mcp.tool()
+def vocab_remove(entry: str) -> dict:
+    """Remove a term, or a rule (pass 'wrong => right' or just its left side), from vocabulary.txt."""
+    target = (entry or "").strip()
+    path = _vocab_path()
+    if not target or not path.exists():
+        return {"ok": False, "error": "nothing to remove"}
+    want_rule = target.split("=>", 1)[0].strip().lower() if "=>" in target else None
+    kept, removed = [], []
+    for raw in path.read_text(encoding="utf-8").splitlines():
+        line = raw.split(" #", 1)[0].strip()
+        hit = False
+        if line and not line.startswith("#"):
+            if "=>" in line:
+                left = line.split("=>", 1)[0].strip().lower()
+                hit = left == (want_rule if want_rule is not None else target.lower())
+            else:
+                hit = want_rule is None and line == target
+        (removed if hit else kept).append(raw)
+    if not removed:
+        return {"ok": False, "error": f"not found: {target!r}"}
+    path.write_text("\n".join(kept) + "\n", encoding="utf-8")
+    return {"ok": True, "removed": removed, "note": "active from the next dictation"}
 
 
 @mcp.tool()

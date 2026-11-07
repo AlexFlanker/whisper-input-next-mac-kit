@@ -12,6 +12,8 @@
 
 ## ✨ 这个 kit 在上游之上加了什么
 
+- 🎯 **Qwen3-ASR 本地引擎（默认，Apple Silicon）**——比 whisper large-v3 更准更快：在 15 句真实口语（中文 / 英文 / 中英混说 / 专有名词）上，错误从 19 处降到 11 处，中位耗时 2.6s → 0.8s；没听到人声时不会像 whisper 那样编一句话出来。模型常驻内存（约 5 GB），后台加载完成前 / 出错时自动用 whisper.cpp 兜底。`LOCAL_ASR_ENGINE=whisper` 可切回，也可在 Claude 桌面里用 MCP（`set_asr_engine`）切换。
+- 📖 **本地词库**——`vocabulary.txt` 一行一个你的专有名词（作为 Qwen3-ASR 热词），或写 `错 => 对` 的纠错规则；保存即生效，也可以直接让 Claude 用 MCP（`vocab_add` / `vocab_remove`）帮你改。
 - 🎙️ **轻点右 ⌘ 开始/停止**——单键切换，不用别扭的组合键，不和 App 冲突。
 - 🔊 **声音提示**——开始/停止是 *Submarine*（声纳），文字粘好是 *Glass*（叮咚）。凭耳朵操作，全程不用盯屏幕。每个提示音都可用环境变量改（`SOUND_START`/`SOUND_STOP`/`SOUND_DONE`/`SOUND_ERROR`/`SOUND_WARNING`）。
 - 🧠 **Ctrl+F 也走本地** whisper.cpp（上游只把本地绑在 Ctrl+I）。
@@ -27,7 +29,7 @@
 ## ✅ 环境要求
 
 - **macOS**（建议 Apple Silicon），已装 **[Homebrew](https://brew.sh)**。
-- 默认模型 `large-v3-turbo` 需约 2GB 空间；`large-v3` 约 3GB。
+- 默认模型 `large-v3-turbo` 需约 2GB 空间；`large-v3` 约 3GB。Qwen3-ASR 另需约 4GB 磁盘、运行时约 5GB 内存（仅 Apple Silicon；安装时设 `WIN_ASR_ENGINE=whisper` 可跳过）。
 - `git`（`xcode-select --install`）。其余（`uv`、`ffmpeg`、`whisper-cpp`）会自动帮你装。
 
 ## 🚀 安装

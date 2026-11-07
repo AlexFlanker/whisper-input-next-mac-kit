@@ -3,6 +3,37 @@
 All notable changes to this kit are documented here.
 This project adheres to [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+Qwen3-ASR becomes the default local engine (whisper.cpp stays as the automatic fallback), plus the
+first slice of the Local Vocabulary feature from `docs/v0.3.0-blueprint.md`.
+
+### Added
+- **Qwen3-ASR engine** (`src/transcription/qwen3_asr.py`, MIT) — Qwen3-ASR-1.7B via MLX on Apple
+  Silicon, loaded in the background at startup and kept resident (~5 GB). Load and inference run on
+  one dedicated thread (MLX streams are thread-bound). While it loads, or on missing deps / error /
+  timeout (`QWEN_ASR_TIMEOUT`, default 60s), dictation transparently uses whisper.cpp. Engine state
+  is written to `logs/asr_engine.json`. A/B on 15 real utterances (zh / en / code-switching / proper
+  nouns, M5 · 24 GB): whisper large-v3 19 errors, median 2.6s → Qwen3-ASR + vocabulary 11 errors,
+  median 0.8s; on non-speech audio Qwen3-ASR returns nothing where whisper hallucinated a sentence.
+- **Local vocabulary** (`vocabulary.txt`, `src/transcription/local_vocab.py`, MIT) — one term per line
+  (fed to Qwen3-ASR as context/hotwords) and explicit `wrong => right` rules (exact, whole-word for
+  Latin, literal for CJK, longest-first, capped by `VOCAB_MAX_REPLACEMENTS`) applied to either
+  engine's output. Hot-reloaded on save; any failure returns the text untouched.
+- **MCP**: `set_asr_engine` (qwen3 | whisper), `vocab_list` / `vocab_add` / `vocab_remove`;
+  `status()` now reports the engine actually in use and vocabulary counts.
+- `tools/asr_ab` in the app checkout was used for the A/B (not shipped by the kit).
+
+### Fixed
+- **Polish no longer translates English into Chinese** — both polish prompts now require keeping the
+  source language (GLM-4 used to "polish" English dictation into Chinese).
+
+### Notes
+- New env knobs: `LOCAL_ASR_ENGINE` (default `qwen3`; install with `WIN_ASR_ENGINE=whisper` to skip),
+  `QWEN_ASR_MODEL`, `QWEN_ASR_TIMEOUT`, `VOCAB_ENABLED`, `VOCAB_FILE`, `VOCAB_MAX_REPLACEMENTS`.
+- `install.sh` installs `qwen3-asr-mlx` + `soxr` and pre-downloads the model (~4 GB) on Apple
+  Silicon; Intel Macs automatically stay on whisper.cpp. Patcher footprint: 2 edits in `main.py`.
+
 ## [0.2.1] — 2026-06-02
 
 Resilience against occasional freezes.

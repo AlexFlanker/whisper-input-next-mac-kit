@@ -18,6 +18,8 @@ PIN_COMMIT="${WIN_COMMIT:-5edec44bd66ca0a75c75c485d5af2fd201ce8c17}"
 APP_DIR="${WIN_APP_DIR:-$HOME/Whisper-Input-Next}"
 MODEL="${WIN_MODEL:-large-v3-turbo}"          # large-v3-turbo | large-v3 | medium | small | base ...
 LABEL="${WIN_LABEL:-com.whisper-input-next.kit}"
+ASR_ENGINE="${WIN_ASR_ENGINE:-qwen3}"          # qwen3 (Qwen3-ASR via MLX, Apple Silicon) | whisper
+QWEN_MODEL="${WIN_QWEN_MODEL:-mlx-community/Qwen3-ASR-1.7B-bf16}"
 KIT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 c()    { printf '\033[1;36m[win-kit]\033[0m %s\n' "$*"; }
@@ -65,6 +67,30 @@ uv venv --python 3.12 "$APP_DIR/.venv"
 VENV_PY="$APP_DIR/.venv/bin/python"
 REAL_PY="$("$VENV_PY" -c 'import os,sys;print(os.path.realpath(sys.executable))')"
 
+# ---------- Qwen3-ASR engine (Apple Silicon only; whisper.cpp stays as the fallback) ----------
+if [ "$ASR_ENGINE" = "qwen3" ] && [ "$(uname -m)" != "arm64" ]; then
+  warn "Qwen3-ASR needs Apple Silicon (MLX); this Mac is $(uname -m) — using whisper.cpp only."
+  ASR_ENGINE="whisper"
+fi
+if [ "$ASR_ENGINE" = "qwen3" ]; then
+  c "Installing Qwen3-ASR runtime (MLX) ..."
+  uv pip install --python "$VENV_PY" "qwen3-asr-mlx>=0.3.0" "soxr>=0.5.0"
+  c "Downloading Qwen3-ASR model ${QWEN_MODEL} (~4 GB, one time) ..."
+  if ! "$VENV_PY" - "$QWEN_MODEL" <<'PY'
+import sys
+from huggingface_hub import snapshot_download
+repo = sys.argv[1]
+try:
+    snapshot_download(repo_id=repo)
+except Exception as exc:  # GFW-friendly fallback, same as the whisper model download
+    print(f"HuggingFace failed ({exc}); trying hf-mirror.com ...")
+    snapshot_download(repo_id=repo, endpoint="https://hf-mirror.com")
+PY
+  then
+    warn "Qwen3-ASR model download failed — the service will retry in the background and use whisper.cpp meanwhile."
+  fi
+fi
+
 # ---------- model ----------
 MODEL_FILE="$APP_DIR/models/ggml-${MODEL}.bin"
 if [ -f "$MODEL_FILE" ]; then
@@ -89,6 +115,11 @@ cp "$KIT_DIR/payload/capsule_indicator.py"  "$APP_DIR/src/ui/capsule_indicator.p
 cp "$KIT_DIR/payload/ollama_polish.py"      "$APP_DIR/src/transcription/ollama_polish.py"
 cp "$KIT_DIR/payload/freeze_watchdog.py"    "$APP_DIR/src/utils/freeze_watchdog.py"
 cp "$KIT_DIR/payload/hold_restart.py"       "$APP_DIR/src/ui/hold_restart.py"
+cp "$KIT_DIR/payload/local_vocab.py"        "$APP_DIR/src/transcription/local_vocab.py"
+cp "$KIT_DIR/payload/qwen3_asr.py"          "$APP_DIR/src/transcription/qwen3_asr.py"
+if [ ! -f "$APP_DIR/vocabulary.txt" ]; then
+  cp "$KIT_DIR/templates/vocabulary.example.txt" "$APP_DIR/vocabulary.txt"
+fi
 
 # ---------- enhancements ----------
 c "Applying enhancements (sounds / right-Cmd toggle / Ctrl+F->local / punctuation / cleanup / indicator) ..."
@@ -101,6 +132,9 @@ else
   c "Writing .env ..."
   sed -e "s#__WHISPER_CLI_PATH__#${WHISPER_CLI}#g" \
       -e "s#__WHISPER_MODEL_PATH__#${MODEL_FILE}#g" \
+      -e "s#__LOCAL_ASR_ENGINE__#${ASR_ENGINE}#g" \
+      -e "s#__QWEN_ASR_MODEL__#${QWEN_MODEL}#g" \
+      -e "s#__APP_DIR__#${APP_DIR}#g" \
       "$KIT_DIR/templates/env.local.template" > "$APP_DIR/.env"
 fi
 
